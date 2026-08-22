@@ -1,0 +1,40 @@
+# Build files and caches
+.gradle/
+build/
+*/build/
+app/build/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Local configuration and credentials
+local.properties
+keystore.properties
+*.jks
+*.keystore
+*.p12
+*.key
+*.pem
+
+# IDE and OS files
+.idea/
+*.iml
+*.iws
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Node / JS artifacts (Huawei DevEco / tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.haps/
+*.hap
+dist/
+out/

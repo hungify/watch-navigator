@@ -1,0 +1,5 @@
+node_modules/
+entry/src/main/js/default/
+dist/
+build/
+pnpm-lock.yaml

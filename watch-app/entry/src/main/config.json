@@ -1,0 +1,44 @@
+{
+  "app": {
+    "bundleName": "com.watchnavigator.watch",
+    "vendor": "watchnavigator",
+    "version": {
+      "code": 1,
+      "name": "1.0.0"
+    }
+  },
+  "deviceConfig": {
+    "default": {},
+    "liteWearable": {}
+  },
+  "module": {
+    "package": "com.watchnavigator.watch.entry",
+    "name": ".MyApplication",
+    "deviceType": ["liteWearable"],
+    "distro": {
+      "deliveryWithInstall": true,
+      "moduleName": "entry",
+      "moduleType": "entry"
+    },
+    "abilities": [
+      {
+        "name": "default",
+        "srcLanguage": "js",
+        "srcPath": "default",
+        "icon": "$media:icon",
+        "label": "$string:app_name",
+        "type": "page"
+      }
+    ],
+    "js": [
+      {
+        "mode": {
+          "syntax": "plain",
+          "type": "pageAbility"
+        },
+        "name": "default",
+        "pages": ["pages/index/index"]
+      }
+    ]
+  }
+}

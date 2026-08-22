@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Watch Navigator</string>
+    <string name="title_destination">Destination</string>
+    <string name="hint_search_destination">Search destination or place...</string>
+    <string name="label_navigation_status">Navigation Status</string>
+    <string name="label_travel_mode">Travel Mode</string>
+    <string name="mode_driving">Motorbike / Driving</string>
+    <string name="mode_walking">Walking</string>
+    <string name="btn_start_navigation">Start Navigation</string>
+    <string name="btn_stop_navigation">Stop Navigation</string>
+    <string name="status_ready">Ready to navigate</string>
+    <string name="status_navigating">Navigating...</string>
+</resources>

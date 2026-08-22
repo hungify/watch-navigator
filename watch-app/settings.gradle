@@ -1,0 +1,2 @@
+include ':entry'
+rootProject.name = 'watch-navigator-watch'

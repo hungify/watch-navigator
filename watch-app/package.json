@@ -1,0 +1,45 @@
+{
+  "name": "watch-navigator-watch",
+  "version": "1.0.0",
+  "description": "Huawei Lite Wearable turn-by-turn navigation application (Watch GT5)",
+  "type": "module",
+  "main": "entry/src/main/js/default/app.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "watch": "tsc --watch",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:unit": "node --test --experimental-strip-types test/*.test.ts",
+    "validate": "tsc && node -e \"import fs from 'fs'; const config = JSON.parse(fs.readFileSync('entry/src/main/config.json', 'utf8')); if (!config.module.deviceType.includes('liteWearable')) throw new Error('Invalid deviceType'); if (!fs.existsSync('entry/src/main/resources/base/media/icon.png')) throw new Error('Missing icon.png'); console.log('Lite Wearable TypeScript build & config valid');\"",
+    "test": "pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm run test:unit && pnpm run validate"
+  },
+  "keywords": [
+    "huawei",
+    "lite-wearable",
+    "watch-gt5",
+    "harmonyos",
+    "wear-engine",
+    "typescript"
+  ],
+  "author": "hungify",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.6.0",
+    "pnpm": ">=11.0.0"
+  },
+  "packageManager": "pnpm@11.22.0",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.10.1",
+    "eslint": "^10.9.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-perfectionist": "^5.10.1",
+    "eslint-plugin-sonarjs": "^4.2.0",
+    "prettier": "^3.9.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0"
+  }
+}
