@@ -1,5 +1,5 @@
 import type { NavigationSession } from './session.ts';
-
+import type { WearEngineDriver } from './wearengine.ts';
 export type TurnType =
   | 'straight'
   | 'left'
@@ -39,7 +39,11 @@ export type TurnType =
   | 'arrive'
   | 'destination'
   | 'continue'
-  | 'merge';
+  | 'merge'
+  | 'stop'
+  | 'terminate'
+  | 'exit'
+  | 'reset';
 
 export interface NavigationPayload {
   turn: TurnType | (string & {});
@@ -71,7 +75,7 @@ export interface WatchPageIndexPage extends WatchPageState {
   onShow(this: WatchPageIndexPage): void;
   onHide(this: WatchPageIndexPage): void;
   onDestroy(this: WatchPageIndexPage): void;
-  initWearEngineReceiver(this: WatchPageIndexPage): void;
+  initWearEngineReceiver(this: WatchPageIndexPage, driver?: WearEngineDriver | null): void;
   destroyWearEngineReceiver(this: WatchPageIndexPage): void;
   updateNavigation(this: WatchPageIndexPage, data: unknown): void;
   syncState(this: WatchPageIndexPage, state: WatchPageState): void;
@@ -139,6 +143,11 @@ export function getCanonicalTurn(turn: string): string {
       return 'continue';
     case 'merge':
       return 'merge';
+    case 'stop':
+    case 'terminate':
+    case 'exit':
+    case 'reset':
+      return 'stop';
     default:
       return normalizedTurn || 'straight';
   }
