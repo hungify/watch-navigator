@@ -1,18 +1,30 @@
-import {
-  getTurnIcon,
-  isValidNavigationPayload,
-  WatchPageIndexPage,
-  WatchPageState
-} from '../../types';
+import type { WatchPageIndexPage } from '../../types.ts';
+
+import { NavigationSession } from '../../session.ts';
+
+const session = new NavigationSession();
 
 const page = {
-  data: {
-    isNavigating: false,
-    statusText: 'Disconnected',
-    turnIcon: '↑',
-    distance: '0',
-    street: 'Ready'
-  } as WatchPageState,
+  data: session.getState(),
+  session,
+
+  onDestroy(this: WatchPageIndexPage): void {
+    console.info('Watch Navigator Page onDestroy');
+    this.session.reset();
+    this.destroyWearEngineReceiver();
+  },
+
+  destroyWearEngineReceiver(this: WatchPageIndexPage): void {
+    console.info('Wear Engine receiver destroyed');
+  },
+
+  initWearEngineReceiver(this: WatchPageIndexPage): void {
+    console.info('Wear Engine receiver initialized');
+  },
+
+  onHide(this: WatchPageIndexPage): void {
+    console.info('Watch Navigator Page onHide');
+  },
 
   onInit(this: WatchPageIndexPage): void {
     console.info('Watch Navigator Page onInit');
@@ -23,34 +35,17 @@ const page = {
     console.info('Watch Navigator Page onShow');
   },
 
-  onHide(this: WatchPageIndexPage): void {
-    console.info('Watch Navigator Page onHide');
-  },
-
-  onDestroy(this: WatchPageIndexPage): void {
-    console.info('Watch Navigator Page onDestroy');
-    this.destroyWearEngineReceiver();
-  },
-
-  initWearEngineReceiver(this: WatchPageIndexPage): void {
-    console.info('Wear Engine receiver initialized');
-  },
-
-  destroyWearEngineReceiver(this: WatchPageIndexPage): void {
-    console.info('Wear Engine receiver destroyed');
-  },
-
   updateNavigation(this: WatchPageIndexPage, data: unknown): void {
-    if (!isValidNavigationPayload(data)) {
+    if (!this.session.ingest(data)) {
       return;
     }
 
-    const payload = data;
-    this.isNavigating = true;
-    this.statusText = payload.turn.toLowerCase() === 'arrive' ? 'Arrived' : 'Navigating';
-    this.distance = String(payload.distance_m ?? payload.distanceMeters ?? 0);
-    this.street = typeof payload.street === 'string' ? payload.street : '';
-    this.turnIcon = getTurnIcon(payload.turn);
+    const state = this.session.getState();
+    this.distance = state.distance;
+    this.isNavigating = state.isNavigating;
+    this.statusText = state.statusText;
+    this.street = state.street;
+    this.turnIcon = state.turnIcon;
   }
 };
 

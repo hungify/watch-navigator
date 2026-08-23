@@ -18,6 +18,7 @@ keystore.properties
 *.key
 *.pem
 
+.worktrees/
 # IDE and OS files
 .idea/
 *.iml

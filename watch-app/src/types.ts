@@ -1,19 +1,24 @@
+import type { NavigationSession } from './session.ts';
+
 export type TurnType =
   | 'straight'
   | 'left'
   | 'turn-left'
+  | 'sharp-left'
   | 'right'
   | 'turn-right'
+  | 'sharp-right'
   | 'slight-left'
   | 'slight-right'
   | 'uturn'
   | 'arrive';
 
 export interface NavigationPayload {
-  turn: TurnType;
+  turn: TurnType | (string & {});
   distance_m?: number;
   distanceMeters?: number;
   street?: string;
+  streetName?: string;
 }
 
 export interface WatchPageState {
@@ -26,6 +31,7 @@ export interface WatchPageState {
 
 export interface WatchPageIndexPage extends WatchPageState {
   data: WatchPageState;
+  session: NavigationSession;
   onInit(this: WatchPageIndexPage): void;
   onShow(this: WatchPageIndexPage): void;
   onHide(this: WatchPageIndexPage): void;
@@ -36,13 +42,15 @@ export interface WatchPageIndexPage extends WatchPageState {
 }
 
 export function getTurnIcon(turn: string): string {
-  const normalizedTurn = (turn || '').toLowerCase();
+  const normalizedTurn = (turn || '').trim().toLowerCase().replace(/_/g, '-');
   switch (normalizedTurn) {
     case 'left':
     case 'turn-left':
+    case 'sharp-left':
       return '←';
     case 'right':
     case 'turn-right':
+    case 'sharp-right':
       return '→';
     case 'slight-left':
       return '↖';
@@ -63,5 +71,26 @@ export function isValidNavigationPayload(data: unknown): data is NavigationPaylo
     return false;
   }
   const candidate = data as Record<string, unknown>;
-  return typeof candidate.turn === 'string' && candidate.turn.trim().length > 0;
+  if (typeof candidate.turn !== 'string' || candidate.turn.trim().length === 0) {
+    return false;
+  }
+  if (
+    candidate.distance_m !== undefined &&
+    (typeof candidate.distance_m !== 'number' || !Number.isFinite(candidate.distance_m))
+  ) {
+    return false;
+  }
+  if (
+    candidate.distanceMeters !== undefined &&
+    (typeof candidate.distanceMeters !== 'number' || !Number.isFinite(candidate.distanceMeters))
+  ) {
+    return false;
+  }
+  if (candidate.street !== undefined && typeof candidate.street !== 'string') {
+    return false;
+  }
+  if (candidate.streetName !== undefined && typeof candidate.streetName !== 'string') {
+    return false;
+  }
+  return true;
 }
