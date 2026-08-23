@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
@@ -8,55 +10,82 @@ import {
   isValidNavigationPayload
 } from '../src/types.ts';
 
-test('getTurnIcon maps all turn directions correctly', () => {
+test('getTurnIcon maps all turn directions correctly to asset paths', () => {
   // Standard turns
-  assert.equal(getTurnIcon('left'), '←');
-  assert.equal(getTurnIcon('turn-left'), '←');
-  assert.equal(getTurnIcon('turn_left'), '←');
-  assert.equal(getTurnIcon('right'), '→');
-  assert.equal(getTurnIcon('turn-right'), '→');
-  assert.equal(getTurnIcon('turn_right'), '→');
+  assert.equal(getTurnIcon('left'), '/common/turn_left.png');
+  assert.equal(getTurnIcon('turn-left'), '/common/turn_left.png');
+  assert.equal(getTurnIcon('turn_left'), '/common/turn_left.png');
+  assert.equal(getTurnIcon('right'), '/common/turn_right.png');
+  assert.equal(getTurnIcon('turn-right'), '/common/turn_right.png');
+  assert.equal(getTurnIcon('turn_right'), '/common/turn_right.png');
 
   // Slight turns & ramps/forks
-  assert.equal(getTurnIcon('slight-left'), '↖');
-  assert.equal(getTurnIcon('slight_left'), '↖');
-  assert.equal(getTurnIcon('turn-slight-left'), '↖');
-  assert.equal(getTurnIcon('ramp-left'), '↖');
-  assert.equal(getTurnIcon('fork-left'), '↖');
-  assert.equal(getTurnIcon('slight-right'), '↗');
-  assert.equal(getTurnIcon('slight_right'), '↗');
-  assert.equal(getTurnIcon('turn-slight-right'), '↗');
-  assert.equal(getTurnIcon('ramp-right'), '↗');
-  assert.equal(getTurnIcon('fork-right'), '↗');
+  assert.equal(getTurnIcon('slight-left'), '/common/turn_slight_left.png');
+  assert.equal(getTurnIcon('slight_left'), '/common/turn_slight_left.png');
+  assert.equal(getTurnIcon('turn-slight-left'), '/common/turn_slight_left.png');
+  assert.equal(getTurnIcon('ramp-left'), '/common/turn_slight_left.png');
+  assert.equal(getTurnIcon('fork-left'), '/common/turn_slight_left.png');
+  assert.equal(getTurnIcon('slight-right'), '/common/turn_slight_right.png');
+  assert.equal(getTurnIcon('slight_right'), '/common/turn_slight_right.png');
+  assert.equal(getTurnIcon('turn-slight-right'), '/common/turn_slight_right.png');
+  assert.equal(getTurnIcon('ramp-right'), '/common/turn_slight_right.png');
+  assert.equal(getTurnIcon('fork-right'), '/common/turn_slight_right.png');
 
   // Sharp turns
-  assert.equal(getTurnIcon('sharp-left'), '↰');
-  assert.equal(getTurnIcon('sharp_left'), '↰');
-  assert.equal(getTurnIcon('turn-sharp-left'), '↰');
-  assert.equal(getTurnIcon('sharp-right'), '↱');
-  assert.equal(getTurnIcon('sharp_right'), '↱');
-  assert.equal(getTurnIcon('turn-sharp-right'), '↱');
+  assert.equal(getTurnIcon('sharp-left'), '/common/turn_sharp_left.png');
+  assert.equal(getTurnIcon('sharp_left'), '/common/turn_sharp_left.png');
+  assert.equal(getTurnIcon('turn-sharp-left'), '/common/turn_sharp_left.png');
+  assert.equal(getTurnIcon('sharp-right'), '/common/turn_sharp_right.png');
+  assert.equal(getTurnIcon('sharp_right'), '/common/turn_sharp_right.png');
+  assert.equal(getTurnIcon('turn-sharp-right'), '/common/turn_sharp_right.png');
 
   // U-turns
-  assert.equal(getTurnIcon('uturn'), '⮌');
-  assert.equal(getTurnIcon('uturn-left'), '⮌');
-  assert.equal(getTurnIcon('uturn_left'), '⮌');
-  assert.equal(getTurnIcon('uturn-right'), '⮌');
-  assert.equal(getTurnIcon('uturn_right'), '⮌');
-  assert.equal(getTurnIcon('u-turn'), '⮌');
+  assert.equal(getTurnIcon('uturn'), '/common/turn_uturn.png');
+  assert.equal(getTurnIcon('uturn-left'), '/common/turn_uturn.png');
+  assert.equal(getTurnIcon('uturn_left'), '/common/turn_uturn.png');
+  assert.equal(getTurnIcon('uturn-right'), '/common/turn_uturn.png');
+  assert.equal(getTurnIcon('uturn_right'), '/common/turn_uturn.png');
+  assert.equal(getTurnIcon('u-turn'), '/common/turn_uturn.png');
 
   // Roundabout & special
-  assert.equal(getTurnIcon('roundabout'), '⟳');
-  assert.equal(getTurnIcon('roundabout-left'), '⟳');
-  assert.equal(getTurnIcon('roundabout-right'), '⟳');
-  assert.equal(getTurnIcon('depart'), '↑');
-  assert.equal(getTurnIcon('arrive'), '★');
-  assert.equal(getTurnIcon('destination'), '★');
-  assert.equal(getTurnIcon('straight'), '↑');
-  assert.equal(getTurnIcon('continue'), '↑');
-  assert.equal(getTurnIcon('merge'), '↑');
-  assert.equal(getTurnIcon('unknown'), '↑');
-  assert.equal(getTurnIcon(''), '↑');
+  assert.equal(getTurnIcon('roundabout'), '/common/turn_roundabout.png');
+  assert.equal(getTurnIcon('roundabout-left'), '/common/turn_roundabout.png');
+  assert.equal(getTurnIcon('roundabout-right'), '/common/turn_roundabout.png');
+  assert.equal(getTurnIcon('depart'), '/common/turn_depart.png');
+  assert.equal(getTurnIcon('arrive'), '/common/turn_arrive.png');
+  assert.equal(getTurnIcon('destination'), '/common/turn_arrive.png');
+  assert.equal(getTurnIcon('straight'), '/common/turn_straight.png');
+  assert.equal(getTurnIcon('continue'), '/common/turn_straight.png');
+  assert.equal(getTurnIcon('merge'), '/common/turn_straight.png');
+  assert.equal(getTurnIcon('unknown'), '/common/turn_straight.png');
+  assert.equal(getTurnIcon(''), '/common/turn_straight.png');
+});
+
+test('All turn icon assets exist in media resources and common directory', () => {
+  const maneuvers = [
+    'left',
+    'right',
+    'slight-left',
+    'slight-right',
+    'sharp-left',
+    'sharp-right',
+    'uturn',
+    'roundabout',
+    'arrive',
+    'depart',
+    'straight'
+  ];
+
+  for (const maneuver of maneuvers) {
+    const iconPath = getTurnIcon(maneuver);
+    assert.match(iconPath, /^\/common\/turn_[a-z_]+\.png$/);
+    const filename = path.basename(iconPath);
+    const mediaPath = path.resolve('entry/src/main/resources/base/media', filename);
+    const commonPath = path.resolve('entry/src/main/js/default/common', filename);
+
+    assert.equal(fs.existsSync(mediaPath), true, `Media asset missing: ${mediaPath}`);
+    assert.equal(fs.existsSync(commonPath), true, `Common asset missing: ${commonPath}`);
+  }
 });
 test('getCanonicalTurn normalizes aliases to canonical maneuver names', () => {
   // Left aliases

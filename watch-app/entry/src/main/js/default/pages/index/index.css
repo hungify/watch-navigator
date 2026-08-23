@@ -2,8 +2,8 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    width: 454px;
-    height: 454px;
+    width: 466px;
+    height: 466px;
     background-color: #000000;
 }
 
@@ -34,10 +34,10 @@
     align-items: center;
 }
 
-.arrow-icon {
-    font-size: 80px;
-    color: #00E676;
-    text-align: center;
+.arrow-image {
+    width: 88px;
+    height: 88px;
+    object-fit: contain;
 }
 
 .distance-container {
@@ -89,10 +89,10 @@
     align-items: center;
 }
 
-.arrived-icon {
-    font-size: 72px;
-    color: #FFD600;
-    text-align: center;
+.arrived-image {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
 }
 
 .arrived-title-container {

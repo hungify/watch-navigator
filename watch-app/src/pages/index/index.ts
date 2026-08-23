@@ -12,7 +12,7 @@ const page = {
     isNavigating: false,
     statusText: 'Disconnected',
     street: 'Ready',
-    turnIcon: '↑'
+    turnIcon: '/common/turn_straight.png'
   } as WatchPageState,
 
   destroyWearEngineReceiver(this: WatchPageIndexPage): void {

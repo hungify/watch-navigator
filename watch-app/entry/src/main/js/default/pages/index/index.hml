@@ -5,7 +5,7 @@
 
     <div class="navigation-content" show="{{ isNavigating && !isArrived }}">
         <div class="arrow-container">
-            <text class="arrow-icon">{{ turnIcon }}</text>
+            <image class="arrow-image" src="{{ turnIcon }}"></image>
         </div>
         <div class="distance-container">
             <text class="distance-value">{{ distance }}</text>
@@ -18,7 +18,7 @@
 
     <div class="arrived-content" show="{{ isNavigating && isArrived }}">
         <div class="arrived-icon-container">
-            <text class="arrived-icon">{{ turnIcon }}</text>
+            <image class="arrived-image" src="{{ turnIcon }}"></image>
         </div>
         <div class="arrived-title-container">
             <text class="arrived-title">Destination Reached</text>
