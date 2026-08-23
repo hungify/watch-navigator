@@ -26,13 +26,18 @@ interface DirectionsService {
 }
 
 class GoogleDirectionsService(
-    private val apiKey: String,
+    val apiKey: String = "",
+    val serverUrl: String = "",
+    val serverToken: String = "",
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build(),
     private val parser: DirectionsResponseParser = DirectionsResponseParser()
 ) : DirectionsService {
+
+    val isProxyConfigured: Boolean
+        get() = serverUrl.isNotBlank()
 
     override suspend fun getDirections(
         origin: LatLng,
@@ -54,50 +59,124 @@ class GoogleDirectionsService(
         return fetchDirections(originStr, destStr, mode)
     }
 
+    internal fun buildDirectionsRequest(
+        originParam: String,
+        destinationParam: String,
+        mode: TravelMode
+    ): Request {
+        val isUsingProxy = serverUrl.isNotBlank()
+
+        if (!isUsingProxy && apiKey.isBlank()) {
+            throw IllegalStateException(
+                "Neither Directions proxy (NAV_SERVER_URL) nor Google Maps API key (MAPS_API_KEY) is configured."
+            )
+        }
+
+        val requestUrl = if (isUsingProxy) {
+            val trimmedUrl = serverUrl.trim()
+            val rawBase = if (trimmedUrl.endsWith("/api/v1/directions") || trimmedUrl.endsWith("/directions")) {
+                trimmedUrl
+            } else {
+                "${trimmedUrl.trimEnd('/')}/api/v1/directions"
+            }
+
+            val urlBuilder = rawBase.toHttpUrlOrNull()?.newBuilder()
+                ?: throw IllegalArgumentException("Invalid NAV_SERVER_URL: $serverUrl")
+
+            urlBuilder
+                .addQueryParameter("origin", originParam)
+                .addQueryParameter("destination", destinationParam)
+                .addQueryParameter("mode", mode.apiValue)
+                .build()
+        } else {
+            val urlBuilder = "https://maps.googleapis.com/maps/api/directions/json"
+                .toHttpUrlOrNull()?.newBuilder()
+                ?: throw IllegalArgumentException("Invalid Google Maps Directions API URL")
+
+            urlBuilder
+                .addQueryParameter("origin", originParam)
+                .addQueryParameter("destination", destinationParam)
+                .addQueryParameter("mode", mode.apiValue)
+                .addQueryParameter("key", apiKey.trim())
+                .build()
+        }
+
+        val requestBuilder = Request.Builder()
+            .url(requestUrl)
+            .get()
+
+        if (isUsingProxy && serverToken.isNotBlank()) {
+            requestBuilder.addHeader("Authorization", "Bearer ${serverToken.trim()}")
+        }
+
+        return requestBuilder.build()
+    }
+
     private suspend fun fetchDirections(
         originParam: String,
         destinationParam: String,
         mode: TravelMode
     ): Result<NavRoute> = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank()) {
-            return@withContext Result.failure(
-                IllegalStateException("Google Maps API key is missing. Please configure MAPS_API_KEY.")
-            )
+        val request = try {
+            buildDirectionsRequest(originParam, destinationParam, mode)
+        } catch (e: Exception) {
+            return@withContext Result.failure(e)
         }
-
-        val url = "https://maps.googleapis.com/maps/api/directions/json"
-            .toHttpUrlOrNull()
-            ?.newBuilder()
-            ?.addQueryParameter("origin", originParam)
-            ?.addQueryParameter("destination", destinationParam)
-            ?.addQueryParameter("mode", mode.apiValue)
-            ?.addQueryParameter("key", apiKey)
-            ?.build()
-
-        if (url == null) {
-            return@withContext Result.failure(IllegalArgumentException("Failed to construct directions API URL"))
-        }
-
-        val request = Request.Builder()
-            .url(url)
-            .get()
-            .build()
 
         try {
             httpClient.newCall(request).execute().use { response ->
+                val bodyString = response.body?.string()
+
                 if (!response.isSuccessful) {
-                    return@withContext Result.failure(
-                        IOException("HTTP ${response.code} error from Directions API: ${response.message}")
-                    )
+                    val errorMessage = extractErrorMessage(response.code, response.message, bodyString)
+                    return@withContext Result.failure(IOException(errorMessage))
                 }
 
-                val bodyString = response.body?.string()
-                    ?: return@withContext Result.failure(IOException("Empty response body from Directions API"))
+                if (bodyString.isNullOrBlank()) {
+                    return@withContext Result.failure(IOException("Empty response body from Directions API"))
+                }
 
                 parser.parse(bodyString, mode)
             }
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    private fun extractErrorMessage(responseCode: Int, responseMessage: String, bodyString: String?): String {
+        if (!bodyString.isNullOrBlank()) {
+            try {
+                val json = org.json.JSONObject(bodyString)
+                if (json.has("message") && !json.isNull("message")) {
+                    val msg = json.getString("message").trim()
+                    if (msg.isNotEmpty()) return formatHttpError(responseCode, msg)
+                }
+                if (json.has("error_message") && !json.isNull("error_message")) {
+                    val msg = json.getString("error_message").trim()
+                    if (msg.isNotEmpty()) return formatHttpError(responseCode, msg)
+                }
+                if (json.has("error") && !json.isNull("error")) {
+                    val msg = json.getString("error").trim()
+                    if (msg.isNotEmpty()) return formatHttpError(responseCode, msg)
+                }
+            } catch (_: Exception) {
+                // Ignore JSON parsing failures on error bodies
+            }
+        }
+        return formatHttpError(responseCode, responseMessage.ifBlank { "Request failed" })
+    }
+
+    private fun formatHttpError(code: Int, detail: String): String {
+        return when (code) {
+            400 -> "Bad Request (400): $detail"
+            401 -> "Unauthorized (401): $detail"
+            403 -> "Forbidden (403): $detail"
+            404 -> "Not Found (404): $detail"
+            500 -> "Server Error (500): $detail"
+            502 -> "Bad Gateway (502): $detail"
+            503 -> "Service Unavailable (503): $detail"
+            504 -> "Gateway Timeout (504): $detail"
+            else -> "HTTP $code error from Directions API: $detail"
         }
     }
 }
