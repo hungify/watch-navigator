@@ -22,7 +22,10 @@ import kotlinx.coroutines.launch
 class NavigationSessionManager(
     private var wearEngineService: WearEngineService? = null,
     private var directionsService: DirectionsService? = null,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.Main
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Main,
+    private val engineFactory: (NavRoute, Double) -> NavigationEngine = { route, threshold ->
+        NavigationEngine(route, stepAdvanceThresholdMeters = threshold)
+    }
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
     private val messageChannel = Channel<WatchNavMessage>(Channel.CONFLATED)
@@ -68,6 +71,7 @@ class NavigationSessionManager(
     private var lastRecalculationTimeMs: Long = 0L
     private var activeRecalculationJob: Job? = null
 
+    private var currentVibrationThreshold: Double = NavigationEngine.DEFAULT_STEP_ADVANCE_THRESHOLD_METERS
     init {
         scope.launch {
             for (msg in messageChannel) {
@@ -90,7 +94,8 @@ class NavigationSessionManager(
     fun startSession(
         route: NavRoute,
         travelMode: TravelMode,
-        destName: String = route.destinationAddress
+        destName: String = route.destinationAddress,
+        vibrationThresholdMeters: Double = NavigationEngine.DEFAULT_STEP_ADVANCE_THRESHOLD_METERS
     ) {
         currentSessionId++
         destinationName = destName.ifBlank { route.destinationAddress }
@@ -106,7 +111,8 @@ class NavigationSessionManager(
         activeRecalculationJob = null
         wearEngineService?.stopAutoReconnect()
 
-        val engine = NavigationEngine(route)
+        currentVibrationThreshold = vibrationThresholdMeters
+        val engine = engineFactory(route, vibrationThresholdMeters)
         navigationEngine = engine
 
         if (route.steps.isNotEmpty()) {
@@ -199,7 +205,7 @@ class NavigationSessionManager(
                     _recalculationError.value = null
                     consecutiveOffRouteCount = 0
 
-                    val newEngine = NavigationEngine(newRoute)
+                    val newEngine = engineFactory(newRoute, currentVibrationThreshold)
                     navigationEngine = newEngine
 
                     val latestLoc = _lastLocation.value ?: currentLocation

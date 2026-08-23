@@ -3,6 +3,7 @@ package com.watchnavigator.ui
 import com.google.common.truth.Truth.assertThat
 import com.watchnavigator.data.DirectionsService
 import com.watchnavigator.data.PlacesSearchService
+import com.watchnavigator.data.PreferencesRepository
 import com.watchnavigator.data.WearEngineService
 import com.watchnavigator.engine.NavigationSessionManager
 import com.watchnavigator.model.LatLng
@@ -11,6 +12,7 @@ import com.watchnavigator.model.NavRoute
 import com.watchnavigator.model.NavStep
 import com.watchnavigator.model.PlaceSuggestion
 import com.watchnavigator.model.TravelMode
+import com.watchnavigator.model.UserPreferences
 import com.watchnavigator.model.WatchConnectionState
 import com.watchnavigator.model.WatchNavMessage
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +37,7 @@ class MainViewModelTest {
     private lateinit var fakePlacesService: FakePlacesSearchService
     private lateinit var fakeDirectionsService: FakeDirectionsService
     private lateinit var fakeWearEngineService: FakeWearEngineService
+    private lateinit var fakePreferencesRepository: FakePreferencesRepository
     private lateinit var sessionManager: NavigationSessionManager
     private lateinit var viewModel: MainViewModel
 
@@ -44,13 +47,84 @@ class MainViewModelTest {
         fakePlacesService = FakePlacesSearchService()
         fakeDirectionsService = FakeDirectionsService()
         fakeWearEngineService = FakeWearEngineService()
+        fakePreferencesRepository = FakePreferencesRepository()
         sessionManager = NavigationSessionManager(fakeWearEngineService, fakeDirectionsService, testDispatcher)
-        viewModel = MainViewModel(fakePlacesService, fakeDirectionsService, fakeWearEngineService, sessionManager)
+        viewModel = MainViewModel(
+            fakePlacesService,
+            fakeDirectionsService,
+            fakeWearEngineService,
+            fakePreferencesRepository,
+            sessionManager
+        )
     }
 
     @After
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun travelMode_initializesFromPreferencesDefault() = runTest {
+        val walkingDefaultRepo = FakePreferencesRepository(
+            UserPreferences(defaultTravelMode = TravelMode.WALKING)
+        )
+        val vm = MainViewModel(
+            fakePlacesService,
+            fakeDirectionsService,
+            fakeWearEngineService,
+            walkingDefaultRepo,
+            sessionManager
+        )
+
+        assertThat(vm.travelMode.value).isEqualTo(TravelMode.WALKING)
+    }
+
+    @Test
+    fun refreshTravelModeFromPreferences_whenNotNavigating_appliesLatestDefault() = runTest {
+        assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.DRIVING)
+
+        fakePreferencesRepository.savePreferences(UserPreferences(defaultTravelMode = TravelMode.WALKING))
+        viewModel.refreshTravelModeFromPreferences()
+
+        assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.WALKING)
+    }
+
+    @Test
+    fun refreshTravelModeFromPreferences_whileNavigating_doesNotOverrideActiveMode() = runTest {
+        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+        val dest = LatLng(21.0175, 105.7842)
+        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
+        fakePlacesService.placeLocationToReturn = dest
+
+        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+        advanceUntilIdle()
+        viewModel.startNavigation()
+        advanceUntilIdle()
+
+        fakePreferencesRepository.savePreferences(UserPreferences(defaultTravelMode = TravelMode.WALKING))
+        viewModel.refreshTravelModeFromPreferences()
+
+        assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.DRIVING)
+    }
+
+    @Test
+    fun refreshTravelModeFromPreferences_withSelectedDestination_recalculatesRoute() = runTest {
+        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+        val dest = LatLng(21.0175, 105.7842)
+        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
+        fakePlacesService.placeLocationToReturn = dest
+
+        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+        advanceUntilIdle()
+
+        assertThat(fakeDirectionsService.lastRequestedMode).isEqualTo(TravelMode.DRIVING)
+
+        fakePreferencesRepository.savePreferences(UserPreferences(defaultTravelMode = TravelMode.WALKING))
+        viewModel.refreshTravelModeFromPreferences()
+        advanceUntilIdle()
+
+        assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.WALKING)
+        assertThat(fakeDirectionsService.lastRequestedMode).isEqualTo(TravelMode.WALKING)
     }
 
     @Test
@@ -445,6 +519,16 @@ class MainViewModelTest {
             exceptionToThrow?.let { return Result.failure(it) }
             val route = routeToReturn ?: return Result.failure(IllegalStateException("No route"))
             return Result.success(route)
+        }
+    }
+
+    private class FakePreferencesRepository(
+        private var stored: UserPreferences = UserPreferences()
+    ) : PreferencesRepository {
+        override fun getUserPreferences(): UserPreferences = stored
+
+        override fun savePreferences(preferences: UserPreferences) {
+            stored = preferences
         }
     }
 

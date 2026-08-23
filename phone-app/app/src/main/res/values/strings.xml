@@ -37,4 +37,16 @@
     <string name="notification_arrived">Arrived at destination</string>
     <string name="notification_turn_instruction">In %1$s: %2$s</string>
     <string name="notification_recalculating">Off route — recalculating route...</string>
+
+    <string name="action_settings">Settings</string>
+    <string name="title_settings">Settings</string>
+    <string name="label_default_travel_mode">Default Travel Mode</string>
+    <string name="label_vibration_thresholds">Watch Vibration Warning Distance</string>
+    <string name="hint_driving_threshold">Driving warning distance (m)</string>
+    <string name="hint_walking_threshold">Walking warning distance (m)</string>
+    <string name="btn_save_settings">Save</string>
+    <string name="settings_saved">Settings saved</string>
+    <string name="error_invalid_number">Enter a valid whole number</string>
+    <string name="error_driving_threshold_range">Driving vibration distance must be between %1$d and %2$d meters</string>
+    <string name="error_walking_threshold_range">Walking vibration distance must be between %1$d and %2$d meters</string>
 </resources>

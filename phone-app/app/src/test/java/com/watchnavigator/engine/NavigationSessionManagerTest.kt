@@ -156,6 +156,42 @@ class NavigationSessionManagerTest {
     }
 
     @Test
+    fun startSession_withCustomVibrationThreshold_passesThresholdToEngineFactory() = runTest(testDispatcher) {
+        var capturedThreshold: Double? = null
+        val factoryManager = NavigationSessionManager(
+            fakeWearEngineService,
+            fakeDirectionsService,
+            testDispatcher
+        ) { route, threshold ->
+            capturedThreshold = threshold
+            NavigationEngine(route, stepAdvanceThresholdMeters = threshold)
+        }
+
+        factoryManager.startSession(sampleRoute, TravelMode.WALKING, "Target Hanoi", vibrationThresholdMeters = 50.0)
+        advanceUntilIdle()
+
+        assertThat(capturedThreshold).isEqualTo(50.0)
+    }
+
+    @Test
+    fun startSession_withoutExplicitThreshold_usesEngineDefault() = runTest(testDispatcher) {
+        var capturedThreshold: Double? = null
+        val factoryManager = NavigationSessionManager(
+            fakeWearEngineService,
+            fakeDirectionsService,
+            testDispatcher
+        ) { route, threshold ->
+            capturedThreshold = threshold
+            NavigationEngine(route, stepAdvanceThresholdMeters = threshold)
+        }
+
+        factoryManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        assertThat(capturedThreshold).isEqualTo(NavigationEngine.DEFAULT_STEP_ADVANCE_THRESHOLD_METERS)
+    }
+
+    @Test
     fun sendError_capturesWatchSendFailureAndStartsAutoReconnect() = runTest(testDispatcher) {
         fakeWearEngineService.sendResultToReturn = Result.failure(Exception("Bluetooth lost"))
 
@@ -380,6 +416,32 @@ class NavigationSessionManagerTest {
         val lastSent = fakeWearEngineService.sentMessages.last()
         assertThat(lastSent.turn).isEqualTo("left")
         assertThat(lastSent.street).isEqualTo("New Route St")
+    }
+
+    @Test
+    fun offRoute_recalculation_preservesCustomVibrationThresholdInEngineFactory() = runTest(testDispatcher) {
+        var latestFactoryThreshold: Double? = null
+        val customManager = NavigationSessionManager(
+            fakeWearEngineService,
+            fakeDirectionsService,
+            testDispatcher
+        ) { route, threshold ->
+            latestFactoryThreshold = threshold
+            NavigationEngine(route, stepAdvanceThresholdMeters = threshold)
+        }
+
+        fakeDirectionsService.routeToReturn = sampleRoute
+        customManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi", vibrationThresholdMeters = 75.0)
+        advanceUntilIdle()
+        assertThat(latestFactoryThreshold).isEqualTo(75.0)
+
+        // Force immediate recalculation (>100m deviation)
+        val farOffRouteLoc = LatLng(21.0010, 105.0025)
+        customManager.onLocationUpdate(farOffRouteLoc)
+        advanceUntilIdle()
+
+        assertThat(fakeDirectionsService.requestedCount).isEqualTo(1)
+        assertThat(latestFactoryThreshold).isEqualTo(75.0)
     }
 
     @Test
