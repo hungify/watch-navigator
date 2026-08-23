@@ -15,6 +15,10 @@
     {
       "name": "arrived",
       "value": "Arrived at Destination"
+    },
+    {
+      "name": "vibrate_reason",
+      "value": "Required for turn-by-turn navigation haptic feedback"
     }
   ]
 }

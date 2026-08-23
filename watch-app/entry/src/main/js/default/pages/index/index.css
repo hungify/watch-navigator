@@ -8,8 +8,8 @@
 }
 
 .header {
-    margin-top: 20px;
-    height: 30px;
+    margin-top: 24px;
+    height: 32px;
     justify-content: center;
     align-items: center;
 }
@@ -25,17 +25,17 @@
     justify-content: center;
     align-items: center;
     width: 400px;
-    height: 360px;
+    height: 350px;
 }
 
 .arrow-container {
-    height: 100px;
+    height: 96px;
     justify-content: center;
     align-items: center;
 }
 
 .arrow-icon {
-    font-size: 72px;
+    font-size: 80px;
     color: #00E676;
     text-align: center;
 }
@@ -44,7 +44,7 @@
     flex-direction: row;
     justify-content: center;
     align-items: flex-end;
-    margin-top: 10px;
+    margin-top: 8px;
 }
 
 .distance-value {
@@ -62,17 +62,70 @@
 
 .street-container {
     margin-top: 12px;
-    width: 360px;
+    width: 340px;
     justify-content: center;
     align-items: center;
 }
 
 .street-name {
-    font-size: 26px;
+    font-size: 24px;
+    color: #FFFFFF;
+    text-align: center;
+    max-lines: 2;
+    text-overflow: ellipsis;
+}
+
+.arrived-content {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 380px;
+    height: 350px;
+}
+
+.arrived-icon-container {
+    height: 80px;
+    justify-content: center;
+    align-items: center;
+}
+
+.arrived-icon {
+    font-size: 72px;
+    color: #FFD600;
+    text-align: center;
+}
+
+.arrived-title-container {
+    margin-top: 8px;
+    justify-content: center;
+    align-items: center;
+}
+
+.arrived-title {
+    font-size: 28px;
+    color: #FFFFFF;
+    font-weight: bold;
+    text-align: center;
+}
+
+.arrived-street {
+    font-size: 22px;
     color: #E0E0E0;
     text-align: center;
     max-lines: 2;
     text-overflow: ellipsis;
+}
+
+.arrived-subtitle-container {
+    margin-top: 10px;
+    justify-content: center;
+    align-items: center;
+}
+
+.arrived-subtitle {
+    font-size: 20px;
+    color: #00E676;
+    text-align: center;
 }
 
 .idle-content {

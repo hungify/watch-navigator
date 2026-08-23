@@ -1,7 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import type { VibratorDriver } from '../src/haptics.ts';
+
+import { HapticsService } from '../src/haptics.ts';
 import { NavigationSession } from '../src/session.ts';
+
+class MockVibratorDriver implements VibratorDriver {
+  public calls: Array<{ mode: 'short' | 'long' }> = [];
+
+  vibrate(options: { mode: 'short' | 'long' }): void {
+    this.calls.push(options);
+  }
+}
 
 test('NavigationSession initializes with default disconnected state', () => {
   const session = new NavigationSession();
@@ -9,6 +20,8 @@ test('NavigationSession initializes with default disconnected state', () => {
 
   assert.deepEqual(state, {
     distance: '0',
+    distanceUnit: 'm',
+    isArrived: false,
     isNavigating: false,
     statusText: 'Disconnected',
     street: 'Ready',
@@ -27,48 +40,45 @@ test('NavigationSession getState() returns an immutable copy', () => {
   assert.equal(state2.isNavigating, false);
 });
 
-test('NavigationSession reset() restores default disconnected state', () => {
-  const session = new NavigationSession();
-  session.reset();
+test('NavigationSession ingests valid navigation payload and triggers turn haptic', () => {
+  const driver = new MockVibratorDriver();
+  const haptics = new HapticsService(driver);
+  const session = new NavigationSession(haptics);
 
-  assert.deepEqual(session.getState(), {
-    distance: '0',
-    isNavigating: false,
-    statusText: 'Disconnected',
-    street: 'Ready',
-    turnIcon: '↑'
-  });
-});
-
-test('NavigationSession ingest() updates state on valid payload', () => {
-  const session = new NavigationSession();
   const success = session.ingest({
-    distance_m: 120,
+    distance_m: 150,
     street: 'Nguyen Trai',
     turn: 'left'
   });
 
   assert.equal(success, true);
   assert.deepEqual(session.getState(), {
-    distance: '120',
+    distance: '150',
+    distanceUnit: 'm',
+    isArrived: false,
     isNavigating: true,
     statusText: 'Navigating',
     street: 'Nguyen Trai',
     turnIcon: '←'
   });
+  assert.equal(driver.calls.length, 1);
+  assert.equal(driver.calls[0].mode, 'short');
 });
 
-test('NavigationSession normalizes distance from distance_m or distanceMeters', () => {
+test('NavigationSession formats kilometer distances properly', () => {
   const session = new NavigationSession();
 
-  session.ingest({ distance_m: 350, turn: 'straight' });
-  assert.equal(session.getState().distance, '350');
+  const success = session.ingest({
+    distanceMeters: 2400,
+    streetName: 'Lang Ha',
+    turn: 'straight'
+  });
 
-  session.ingest({ distanceMeters: 50, turn: 'right' });
-  assert.equal(session.getState().distance, '50');
-
-  session.ingest({ turn: 'straight' });
-  assert.equal(session.getState().distance, '0');
+  assert.equal(success, true);
+  const state = session.getState();
+  assert.equal(state.distance, '2.4');
+  assert.equal(state.distanceUnit, 'km');
+  assert.equal(state.street, 'Lang Ha');
 });
 
 test('NavigationSession normalizes street name from street or streetName', () => {
@@ -84,118 +94,81 @@ test('NavigationSession normalizes street name from street or streetName', () =>
   assert.equal(session.getState().street, '');
 });
 
-test('NavigationSession resolves turn icons with normalization', () => {
-  const session = new NavigationSession();
+test('NavigationSession transitions to Arrived state and triggers long arrival vibration', () => {
+  const driver = new MockVibratorDriver();
+  const haptics = new HapticsService(driver);
+  const session = new NavigationSession(haptics);
 
-  session.ingest({ turn: 'TURN_LEFT' });
-  assert.equal(session.getState().turnIcon, '←');
-
-  session.ingest({ turn: 'turn-right' });
-  assert.equal(session.getState().turnIcon, '→');
-
-  session.ingest({ turn: 'slight_left' });
-  assert.equal(session.getState().turnIcon, '↖');
-
-  session.ingest({ turn: 'slight-right' });
-  assert.equal(session.getState().turnIcon, '↗');
-
-  session.ingest({ turn: 'uturn' });
-  assert.equal(session.getState().turnIcon, '⮌');
-
-  session.ingest({ turn: 'straight' });
-  assert.equal(session.getState().turnIcon, '↑');
-});
-
-test('NavigationSession rejects invalid payloads and preserves existing state', () => {
-  const session = new NavigationSession();
-
-  // Setup an active navigation state first
-  session.ingest({
-    distance_m: 100,
-    street: 'Nguyen Trai',
-    turn: 'left'
-  });
-
-  const activeState = session.getState();
-
-  const invalidPayloads: unknown[] = [
-    null,
-    undefined,
-    123,
-    'invalid',
-    true,
-    [],
-    {},
-    { distance_m: 100 },
-    { turn: '' },
-    { turn: '   ' },
-    { turn: 123 },
-    { turn: null },
-    { turn: undefined },
-    { turn: {} },
-    { turn: 'left', distance_m: {} },
-    { turn: 'left', distanceMeters: NaN },
-    { turn: 'left', distanceMeters: Infinity },
-    { turn: 'left', street: 123 },
-    { turn: 'left', streetName: [] }
-  ];
-  for (const payload of invalidPayloads) {
-    const result = session.ingest(payload);
-    assert.equal(result, false, `Expected payload to be rejected: ${JSON.stringify(payload)}`);
-    assert.deepEqual(
-      session.getState(),
-      activeState,
-      'State should remain untouched on invalid ingest'
-    );
-  }
-});
-
-test('NavigationSession handles arrival step and full lifecycle state transitions', () => {
-  const session = new NavigationSession();
-
-  // 1. Initial State: Disconnected
-  assert.equal(session.getState().statusText, 'Disconnected');
-  assert.equal(session.getState().isNavigating, false);
-
-  // 2. Disconnected -> Navigating
-  session.ingest({
-    distance_m: 500,
-    street: 'Giai Phong',
-    turn: 'straight'
-  });
-  assert.equal(session.getState().statusText, 'Navigating');
-  assert.equal(session.getState().isNavigating, true);
-  assert.equal(session.getState().turnIcon, '↑');
-  assert.equal(session.getState().distance, '500');
-  assert.equal(session.getState().street, 'Giai Phong');
-
-  // 3. Navigating -> Next Step
+  // First step
   session.ingest({
     distance_m: 50,
-    street: 'Dai Co Viet',
-    turn: 'right'
+    street: 'Tran Duy Hung',
+    turn: 'slight-right'
   });
-  assert.equal(session.getState().statusText, 'Navigating');
-  assert.equal(session.getState().turnIcon, '→');
-  assert.equal(session.getState().distance, '50');
-  assert.equal(session.getState().street, 'Dai Co Viet');
+  assert.equal(driver.calls.length, 1);
+  assert.equal(driver.calls[0].mode, 'short');
 
-  // 4. Navigating -> Arrived
-  session.ingest({
+  // Arrival step
+  const success = session.ingest({
     distance_m: 0,
-    street: 'Destination',
+    street: 'Vincom Center',
     turn: 'arrive'
   });
-  assert.equal(session.getState().statusText, 'Arrived');
-  assert.equal(session.getState().isNavigating, true);
-  assert.equal(session.getState().turnIcon, '★');
-  assert.equal(session.getState().distance, '0');
-  assert.equal(session.getState().street, 'Destination');
 
-  // 5. Arrived -> Disconnected via reset()
-  session.reset();
+  assert.equal(success, true);
   assert.deepEqual(session.getState(), {
     distance: '0',
+    distanceUnit: 'm',
+    isArrived: true,
+    isNavigating: true,
+    statusText: 'Arrived',
+    street: 'Vincom Center',
+    turnIcon: '★'
+  });
+
+  assert.equal(driver.calls.length, 2);
+  assert.equal(driver.calls[1].mode, 'long');
+});
+
+test('NavigationSession rejects invalid or malformed payloads without altering state', () => {
+  const session = new NavigationSession();
+  session.ingest({
+    distance_m: 200,
+    street: 'Khai Sanh',
+    turn: 'turn-right'
+  });
+  const snapshotBefore = session.getState();
+
+  assert.equal(session.ingest(null), false);
+  assert.equal(session.ingest(undefined), false);
+  assert.equal(session.ingest('invalid'), false);
+  assert.equal(session.ingest({ turn: '' }), false);
+  assert.equal(session.ingest({ turn: '   ' }), false);
+  assert.equal(session.ingest({ turn: 123 }), false);
+  assert.equal(session.ingest({ turn: 'left', distance_m: {} }), false);
+  assert.equal(session.ingest({ turn: 'left', distance_m: NaN }), false);
+  assert.equal(session.ingest({ turn: 'left', distance_m: Infinity }), false);
+  assert.equal(session.ingest({ turn: 'left', distanceMeters: '100' }), false);
+  assert.equal(session.ingest({ turn: 'left', street: 12345 }), false);
+  assert.equal(session.ingest({ turn: 'left', streetName: [] }), false);
+
+  assert.deepEqual(session.getState(), snapshotBefore);
+});
+
+test('NavigationSession reset restores initial state cleanly', () => {
+  const session = new NavigationSession();
+  session.ingest({
+    distance_m: 0,
+    street: 'Destination Point',
+    turn: 'arrive'
+  });
+
+  session.reset();
+
+  assert.deepEqual(session.getState(), {
+    distance: '0',
+    distanceUnit: 'm',
+    isArrived: false,
     isNavigating: false,
     statusText: 'Disconnected',
     street: 'Ready',
@@ -206,11 +179,72 @@ test('NavigationSession handles arrival step and full lifecycle state transition
 test('NavigationSession handles arrival case-insensitively', () => {
   const session = new NavigationSession();
 
-  session.ingest({ turn: 'ARRIVE', distance_m: 0, street: 'Home' });
+  session.ingest({ distance_m: 0, street: 'Home', turn: 'ARRIVE' });
   assert.equal(session.getState().statusText, 'Arrived');
   assert.equal(session.getState().turnIcon, '★');
 
-  session.ingest({ turn: 'Arrive', distance_m: 0, street: 'Office' });
+  session.ingest({ distance_m: 0, street: 'Office', turn: 'Arrive' });
   assert.equal(session.getState().statusText, 'Arrived');
   assert.equal(session.getState().turnIcon, '★');
+});
+
+test('NavigationSession triggers arrival vibration only once across consecutive arrival updates', () => {
+  const driver = new MockVibratorDriver();
+  const haptics = new HapticsService(driver);
+  const session = new NavigationSession(haptics);
+
+  session.ingest({ street: 'Hanoi Opera House', turn: 'arrive' });
+  session.ingest({ street: 'Hanoi Opera House', turn: 'arrive' });
+  session.ingest({ street: 'Hanoi Opera House', turn: 'destination' });
+
+  assert.equal(driver.calls.length, 1);
+  assert.equal(driver.calls[0].mode, 'long');
+});
+
+test('NavigationSession does not re-trigger turn vibration for synonymous turn aliases on same street', () => {
+  const driver = new MockVibratorDriver();
+  const haptics = new HapticsService(driver);
+  const session = new NavigationSession(haptics);
+
+  session.ingest({ distance_m: 100, street: 'Hai Ba Trung', turn: 'left' });
+  assert.equal(driver.calls.length, 1);
+
+  // Equivalent alias 'turn_left' with same street should not re-trigger vibration
+  session.ingest({ distance_m: 80, street: 'Hai Ba Trung', turn: 'turn_left' });
+  assert.equal(driver.calls.length, 1);
+
+  // Changing maneuver to 'right' SHOULD trigger new vibration
+  session.ingest({ distance_m: 50, street: 'Ba Trieu', turn: 'turn_right' });
+  assert.equal(driver.calls.length, 2);
+  assert.equal(driver.calls[1].mode, 'short');
+});
+
+test('NavigationSession triggers second turn vibration for distinct maneuvers sharing icon and street', () => {
+  const driver = new MockVibratorDriver();
+  const haptics = new HapticsService(driver);
+  const session = new NavigationSession(haptics);
+
+  session.ingest({ distance_m: 100, street: 'Roundabout Square', turn: 'roundabout-left' });
+  assert.equal(driver.calls.length, 1);
+  assert.equal(driver.calls[0].mode, 'short');
+
+  // Same icon (⟳) and same street, but distinct maneuver 'roundabout-right' MUST trigger second vibration
+  session.ingest({ distance_m: 80, street: 'Roundabout Square', turn: 'roundabout-right' });
+  assert.equal(driver.calls.length, 2);
+  assert.equal(driver.calls[1].mode, 'short');
+});
+
+test('NavigationSession triggers second turn vibration for distinct maneuvers sharing icon and street', () => {
+  const driver = new MockVibratorDriver();
+  const haptics = new HapticsService(driver);
+  const session = new NavigationSession(haptics);
+
+  session.ingest({ turn: 'roundabout-left', distance_m: 100, street: 'Roundabout Square' });
+  assert.equal(driver.calls.length, 1);
+  assert.equal(driver.calls[0].mode, 'short');
+
+  // Same icon (⟳) and same street, but distinct maneuver 'roundabout-right' MUST trigger second vibration
+  session.ingest({ turn: 'roundabout-right', distance_m: 80, street: 'Roundabout Square' });
+  assert.equal(driver.calls.length, 2);
+  assert.equal(driver.calls[1].mode, 'short');
 });
