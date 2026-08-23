@@ -39,6 +39,16 @@
         "name": "default",
         "pages": ["pages/index/index"]
       }
+    ],
+    "reqPermissions": [
+      {
+        "name": "ohos.permission.VIBRATE",
+        "reason": "$string:vibrate_reason",
+        "usedScene": {
+          "ability": ["default"],
+          "when": "always"
+        }
+      }
     ]
   }
 }

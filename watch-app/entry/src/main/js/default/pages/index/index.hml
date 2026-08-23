@@ -3,16 +3,31 @@
         <text class="status-text">{{ statusText }}</text>
     </div>
 
-    <div class="navigation-content" show="{{ isNavigating }}">
+    <div class="navigation-content" show="{{ isNavigating && !isArrived }}">
         <div class="arrow-container">
             <text class="arrow-icon">{{ turnIcon }}</text>
         </div>
         <div class="distance-container">
             <text class="distance-value">{{ distance }}</text>
-            <text class="distance-unit">m</text>
+            <text class="distance-unit">{{ distanceUnit }}</text>
         </div>
         <div class="street-container">
             <text class="street-name">{{ street }}</text>
+        </div>
+    </div>
+
+    <div class="arrived-content" show="{{ isNavigating && isArrived }}">
+        <div class="arrived-icon-container">
+            <text class="arrived-icon">{{ turnIcon }}</text>
+        </div>
+        <div class="arrived-title-container">
+            <text class="arrived-title">Destination Reached</text>
+        </div>
+        <div class="street-container">
+            <text class="arrived-street">{{ street }}</text>
+        </div>
+        <div class="arrived-subtitle-container">
+            <text class="arrived-subtitle">Trip completed</text>
         </div>
     </div>
 

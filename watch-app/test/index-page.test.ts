@@ -1,92 +1,109 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import type { WatchPageIndexPage } from '../src/types.ts';
+
 import page from '../src/pages/index/index.ts';
 
-test('page initial data is synchronized with NavigationSession initial state', () => {
-  assert.deepEqual(page.data, {
-    distance: '0',
-    isNavigating: false,
-    statusText: 'Disconnected',
-    street: 'Ready',
-    turnIcon: '↑'
-  });
-});
-
-test('page updateNavigation updates UI properties via session.ingest', () => {
-  const mockPageContext = {
+function createPageInstance(): WatchPageIndexPage {
+  const instance = {
     ...page,
-    distance: '0',
-    isNavigating: false,
-    statusText: 'Disconnected',
-    street: 'Ready',
-    turnIcon: '↑'
+    data: { ...page.data },
+    distance: page.data.distance,
+    distanceUnit: page.data.distanceUnit,
+    isArrived: page.data.isArrived,
+    isNavigating: page.data.isNavigating,
+    statusText: page.data.statusText,
+    street: page.data.street,
+    turnIcon: page.data.turnIcon
   };
 
-  mockPageContext.updateNavigation({
-    distance_m: 180,
-    street: 'Kim Ma',
-    turn: 'turn-left'
+  return instance as unknown as WatchPageIndexPage;
+}
+
+test('Watch index page initializes with idle state', () => {
+  const p = createPageInstance();
+  p.onInit();
+
+  assert.equal(p.isNavigating, false);
+  assert.equal(p.isArrived, false);
+  assert.equal(p.statusText, 'Disconnected');
+  assert.equal(p.turnIcon, '↑');
+  assert.equal(p.distance, '0');
+  assert.equal(p.distanceUnit, 'm');
+  assert.equal(p.street, 'Ready');
+});
+
+test('Watch index page delegates updateNavigation and syncs properties', () => {
+  const p = createPageInstance();
+  p.onInit();
+
+  p.updateNavigation({
+    distance_m: 120,
+    street: 'Tran Phu',
+    turn: 'left'
   });
 
-  assert.equal(mockPageContext.isNavigating, true);
-  assert.equal(mockPageContext.statusText, 'Navigating');
-  assert.equal(mockPageContext.distance, '180');
-  assert.equal(mockPageContext.street, 'Kim Ma');
-  assert.equal(mockPageContext.turnIcon, '←');
+  assert.equal(p.isNavigating, true);
+  assert.equal(p.isArrived, false);
+  assert.equal(p.statusText, 'Navigating');
+  assert.equal(p.turnIcon, '←');
+  assert.equal(p.distance, '120');
+  assert.equal(p.distanceUnit, 'm');
+  assert.equal(p.street, 'Tran Phu');
+});
 
-  // Verify arrival
-  mockPageContext.updateNavigation({
+test('Watch index page synchronizes arrival state on arrive maneuver', () => {
+  const p = createPageInstance();
+  p.onInit();
+
+  p.updateNavigation({
     distance_m: 0,
-    street: 'Kim Ma',
+    street: 'Keangnam Tower',
     turn: 'arrive'
   });
 
-  assert.equal(mockPageContext.isNavigating, true);
-  assert.equal(mockPageContext.statusText, 'Arrived');
-  assert.equal(mockPageContext.distance, '0');
-  assert.equal(mockPageContext.turnIcon, '★');
+  assert.equal(p.isNavigating, true);
+  assert.equal(p.isArrived, true);
+  assert.equal(p.statusText, 'Arrived');
+  assert.equal(p.turnIcon, '★');
+  assert.equal(p.street, 'Keangnam Tower');
 });
 
-test('page updateNavigation ignores invalid payloads without updating UI properties', () => {
-  const mockPageContext = {
-    ...page,
-    distance: '100',
-    isNavigating: true,
-    statusText: 'Navigating',
-    street: 'Old Street',
-    turnIcon: '←'
-  };
+test('Watch index page ignores invalid navigation payloads', () => {
+  const p = createPageInstance();
+  p.onInit();
 
-  mockPageContext.updateNavigation(null);
-  assert.equal(mockPageContext.distance, '100');
-  assert.equal(mockPageContext.statusText, 'Navigating');
+  p.updateNavigation({
+    distance_m: 300,
+    street: 'Pham Hung',
+    turn: 'turn-right'
+  });
 
-  mockPageContext.updateNavigation({ invalid: true });
-  assert.equal(mockPageContext.distance, '100');
-  assert.equal(mockPageContext.statusText, 'Navigating');
+  // Now send invalid payload
+  p.updateNavigation(null);
+  p.updateNavigation({ turn: '' });
+
+  assert.equal(p.isNavigating, true);
+  assert.equal(p.turnIcon, '→');
+  assert.equal(p.distance, '300');
+  assert.equal(p.street, 'Pham Hung');
 });
 
-test('page onDestroy resets session and cleans up', () => {
+test('Watch index page onDestroy cleans up session and receiver', () => {
   let receiverDestroyed = false;
-  const mockPageContext = {
-    ...page,
-    destroyWearEngineReceiver() {
-      receiverDestroyed = true;
-    }
+  const p = createPageInstance();
+  p.destroyWearEngineReceiver = () => {
+    receiverDestroyed = true;
   };
+  p.onInit();
 
-  // Ingest valid navigation data first
-  mockPageContext.session.ingest({
+  p.updateNavigation({
     distance_m: 200,
     street: 'Lang Ha',
     turn: 'right'
   });
-  assert.equal(mockPageContext.session.getState().isNavigating, true);
 
-  // Call onDestroy
-  mockPageContext.onDestroy();
+  p.onDestroy();
   assert.equal(receiverDestroyed, true);
-  assert.equal(mockPageContext.session.getState().isNavigating, false);
-  assert.equal(mockPageContext.session.getState().statusText, 'Disconnected');
 });

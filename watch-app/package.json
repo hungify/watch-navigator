@@ -13,7 +13,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:unit": "node --test --experimental-strip-types test/*.test.ts",
-    "validate": "tsc && node -e \"import fs from 'fs'; const config = JSON.parse(fs.readFileSync('entry/src/main/config.json', 'utf8')); if (!config.module.deviceType.includes('liteWearable')) throw new Error('Invalid deviceType'); if (!fs.existsSync('entry/src/main/resources/base/media/icon.png')) throw new Error('Missing icon.png'); console.log('Lite Wearable TypeScript build & config valid');\"",
+    "validate": "tsc && node -e \"import fs from 'fs'; const config = JSON.parse(fs.readFileSync('entry/src/main/config.json', 'utf8')); if (!config.module.deviceType.includes('liteWearable')) throw new Error('Invalid deviceType'); if (!config.module.reqPermissions?.some((p) => p.name === 'ohos.permission.VIBRATE')) throw new Error('Missing ohos.permission.VIBRATE permission'); if (!fs.existsSync('entry/src/main/resources/base/media/icon.png')) throw new Error('Missing icon.png'); console.log('Lite Wearable TypeScript build & config valid');\"",
     "test": "pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm run test:unit && pnpm run validate"
   },
   "keywords": [
