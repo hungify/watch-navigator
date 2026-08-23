@@ -2,8 +2,28 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { WatchPageIndexPage } from '../src/types.ts';
+import type { WearEngineDriver } from '../src/wearengine.ts';
 
 import page from '../src/pages/index/index.ts';
+
+class TestDriver implements WearEngineDriver {
+  public handler: ((data: unknown) => void) | null = null;
+  public unbindCount = 0;
+
+  emit(data: unknown): void {
+    if (this.handler) {
+      this.handler(data);
+    }
+  }
+
+  subscribe(handler: (data: unknown) => void): () => void {
+    this.handler = handler;
+    return () => {
+      this.handler = null;
+      this.unbindCount++;
+    };
+  }
+}
 
 function createPageInstance(): WatchPageIndexPage {
   const instance = {
@@ -106,4 +126,26 @@ test('Watch index page onDestroy cleans up session and receiver', () => {
 
   p.onDestroy();
   assert.equal(receiverDestroyed, true);
+});
+
+test('Watch index page integrates with WearEngine driver messages', () => {
+  const driver = new TestDriver();
+  const p = createPageInstance();
+
+  p.onInit();
+  p.initWearEngineReceiver(driver);
+
+  // Driver emits compact JSON from phone app
+  driver.emit('{"turn":"sharp_left","distanceMeters":85,"street":"Cau Giay"}');
+
+  assert.equal(p.isNavigating, true);
+  assert.equal(p.turnIcon, '/common/turn_sharp_left.png');
+  assert.equal(p.distance, '85');
+  assert.equal(p.distanceUnit, 'm');
+  assert.equal(p.street, 'Cau Giay');
+  assert.equal(p.statusText, 'Navigating');
+
+  // Destroy page
+  p.onDestroy();
+  assert.equal(driver.unbindCount, 1);
 });
