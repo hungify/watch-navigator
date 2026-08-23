@@ -61,6 +61,7 @@ class HuaweiWearEngineService(
 
     private val sendMutex = Mutex()
 
+    @Volatile
     private var activeDevice: Device? = null
 
     init {
@@ -174,9 +175,11 @@ class HuaweiWearEngineService(
                     Result.success(Unit)
                 } else {
                     val errorMsg = WearEngineErrorCode.getErrorMsgFromCode(resultCode) ?: "Result code $resultCode"
+                    activeDevice = null
                     Result.failure(WearEngineServiceException(resultCode, errorMsg))
                 }
             } catch (e: Exception) {
+                activeDevice = null
                 Result.failure(e)
             }
         }
@@ -199,9 +202,11 @@ class HuaweiWearEngineService(
             ) {
                 Result.success(true)
             } else {
+                activeDevice = null
                 Result.success(false)
             }
         } catch (e: Exception) {
+            activeDevice = null
             Result.failure(e)
         }
     }

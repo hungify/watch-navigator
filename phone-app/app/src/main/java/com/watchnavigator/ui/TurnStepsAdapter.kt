@@ -1,8 +1,11 @@
 package com.watchnavigator.ui
 
+import android.graphics.Color
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.annotation.DrawableRes
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -14,6 +17,31 @@ import com.watchnavigator.util.DistanceFormatter
 
 class TurnStepsAdapter : ListAdapter<NavStep, TurnStepsAdapter.ViewHolder>(DiffCallback) {
 
+    private var activeStepIndex: Int = -1
+    private var activeStepRemainingDistance: Int? = null
+
+    fun setActiveStep(index: Int, remainingDistanceMeters: Int? = null) {
+        val prevIndex = activeStepIndex
+        activeStepIndex = index
+        activeStepRemainingDistance = remainingDistanceMeters
+
+        if (prevIndex in 0 until itemCount) {
+            notifyItemChanged(prevIndex)
+        }
+        if (activeStepIndex in 0 until itemCount) {
+            notifyItemChanged(activeStepIndex)
+        }
+    }
+
+    fun clearActiveStep() {
+        val prevIndex = activeStepIndex
+        activeStepIndex = -1
+        activeStepRemainingDistance = null
+        if (prevIndex in 0 until itemCount) {
+            notifyItemChanged(prevIndex)
+        }
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = ItemNavStepBinding.inflate(
             LayoutInflater.from(parent.context),
@@ -24,18 +52,36 @@ class TurnStepsAdapter : ListAdapter<NavStep, TurnStepsAdapter.ViewHolder>(DiffC
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        holder.bind(getItem(position), position == activeStepIndex, activeStepRemainingDistance)
     }
 
     inner class ViewHolder(
         private val binding: ItemNavStepBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(step: NavStep) {
+        fun bind(step: NavStep, isActive: Boolean, activeDistance: Int?) {
             binding.tvStreetName.text = step.streetName.ifBlank { step.instruction }
             binding.tvInstruction.text = step.instruction
-            binding.tvDistance.text = DistanceFormatter.formatDistance(step.distanceMeters)
+
+            val displayDistance = if (isActive && activeDistance != null) {
+                activeDistance
+            } else {
+                step.distanceMeters
+            }
+            binding.tvDistance.text = DistanceFormatter.formatDistance(displayDistance)
             binding.ivManeuver.setImageResource(getManeuverIcon(step.maneuver))
+
+            if (isActive) {
+                val typedValue = TypedValue()
+                val theme = binding.root.context.theme
+                if (theme.resolveAttribute(com.google.android.material.R.attr.colorPrimaryContainer, typedValue, true)) {
+                    binding.root.setBackgroundColor(typedValue.data)
+                } else {
+                    binding.root.setBackgroundColor(Color.parseColor("#E0F2FE"))
+                }
+            } else {
+                binding.root.setBackgroundColor(Color.TRANSPARENT)
+            }
         }
 
         @DrawableRes

@@ -28,4 +28,11 @@
     <string name="watch_status_unauthorized">Watch: Permission Required</string>
     <string name="watch_status_error">Watch: Error (%1$s)</string>
     <string name="btn_connect_watch">Connect Watch</string>
+    <string name="notification_channel_name">Navigation Guidance</string>
+    <string name="notification_channel_description">Ongoing turn-by-turn navigation guidance and watch streaming</string>
+    <string name="notification_navigating_to">Navigating to %1$s</string>
+    <string name="notification_action_stop">Stop</string>
+    <string name="notification_starting">Starting navigation...</string>
+    <string name="notification_arrived">Arrived at destination</string>
+    <string name="notification_turn_instruction">In %1$s: %2$s</string>
 </resources>

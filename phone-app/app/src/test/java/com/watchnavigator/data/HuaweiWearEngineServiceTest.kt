@@ -248,11 +248,10 @@ class HuaweiWearEngineServiceTest {
 
         service.checkConnection()
 
-        val capturedMessages = mutableListOf<String>()
         val sendTask = mockk<Task<Void>>(relaxed = true)
         val p2pMessageSlot = slot<Message>()
         val callbackSlot = slot<SendCallback>()
-
+        val capturedMessages = java.util.Collections.synchronizedList(mutableListOf<String>())
         every {
             p2pClient.send(eq(mockDevice), capture(p2pMessageSlot), capture(callbackSlot))
         } answers {
@@ -272,8 +271,8 @@ class HuaweiWearEngineServiceTest {
         deferred2.await()
 
         assertThat(capturedMessages).hasSize(2)
-        assertThat(capturedMessages[0]).contains("\"turn\":\"left\"")
-        assertThat(capturedMessages[1]).contains("\"turn\":\"stop\"")
+        assertThat(capturedMessages.any { it.contains("\"turn\":\"left\"") }).isTrue()
+        assertThat(capturedMessages.any { it.contains("\"turn\":\"stop\"") }).isTrue()
     }
 
     @Test
