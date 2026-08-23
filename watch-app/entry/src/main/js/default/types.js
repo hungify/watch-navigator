@@ -27,5 +27,22 @@ export function isValidNavigationPayload(data) {
         return false;
     }
     const candidate = data;
-    return typeof candidate.turn === 'string' && candidate.turn.trim().length > 0;
+    if (typeof candidate.turn !== 'string' || candidate.turn.trim().length === 0) {
+        return false;
+    }
+    if (candidate.distance_m !== undefined &&
+        (typeof candidate.distance_m !== 'number' || !Number.isFinite(candidate.distance_m))) {
+        return false;
+    }
+    if (candidate.distanceMeters !== undefined &&
+        (typeof candidate.distanceMeters !== 'number' || !Number.isFinite(candidate.distanceMeters))) {
+        return false;
+    }
+    if (candidate.street !== undefined && typeof candidate.street !== 'string') {
+        return false;
+    }
+    if (candidate.streetName !== undefined && typeof candidate.streetName !== 'string') {
+        return false;
+    }
+    return true;
 }

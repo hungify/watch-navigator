@@ -132,9 +132,13 @@ test('NavigationSession rejects invalid payloads and preserves existing state', 
     { turn: 123 },
     { turn: null },
     { turn: undefined },
-    { turn: {} }
+    { turn: {} },
+    { turn: 'left', distance_m: {} },
+    { turn: 'left', distanceMeters: NaN },
+    { turn: 'left', distanceMeters: Infinity },
+    { turn: 'left', street: 123 },
+    { turn: 'left', streetName: [] }
   ];
-
   for (const payload of invalidPayloads) {
     const result = session.ingest(payload);
     assert.equal(result, false, `Expected payload to be rejected: ${JSON.stringify(payload)}`);
