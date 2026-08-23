@@ -35,6 +35,10 @@ export class NavigationSession {
         }
         const payload = data;
         const canonicalTurn = getCanonicalTurn(payload.turn);
+        if (canonicalTurn === 'stop') {
+            this.reset();
+            return true;
+        }
         const isArrived = canonicalTurn === 'arrive';
         const rawDistance = payload.distance_m ?? payload.distanceMeters;
         const formattedDistance = formatDistance(rawDistance);

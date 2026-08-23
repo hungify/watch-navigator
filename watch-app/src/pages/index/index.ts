@@ -1,8 +1,11 @@
 import type { WatchPageIndexPage, WatchPageState } from '../../types.ts';
+import type { WearEngineDriver } from '../../wearengine.ts';
 
 import { NavigationSession } from '../../session.ts';
+import { WearEngineReceiver } from '../../wearengine.ts';
 
 let session: NavigationSession | null = null;
+let receiver: WearEngineReceiver | null = null;
 
 const page = {
   data: {
@@ -16,10 +19,21 @@ const page = {
   } as WatchPageState,
 
   destroyWearEngineReceiver(this: WatchPageIndexPage): void {
+    if (receiver) {
+      receiver.stop();
+      receiver = null;
+    }
     console.info('Wear Engine receiver destroyed');
   },
 
-  initWearEngineReceiver(this: WatchPageIndexPage): void {
+  initWearEngineReceiver(this: WatchPageIndexPage, driver?: null | WearEngineDriver): void {
+    if (receiver) {
+      receiver.stop();
+    }
+    receiver = new WearEngineReceiver(driver, payload => {
+      this.updateNavigation(payload);
+    });
+    receiver.start();
     console.info('Wear Engine receiver initialized');
   },
 

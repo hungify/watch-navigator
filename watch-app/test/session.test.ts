@@ -176,6 +176,30 @@ test('NavigationSession reset restores initial state cleanly', () => {
   });
 });
 
+test('NavigationSession resets to initial state on terminal stop payload without triggering haptics', () => {
+  const driver = new MockVibratorDriver();
+  const haptics = new HapticsService(driver);
+  const session = new NavigationSession(haptics);
+
+  session.ingest({ distanceMeters: 150, street: 'Nguyen Trai', turn: 'left' });
+  assert.equal(session.getState().isNavigating, true);
+  assert.equal(driver.calls.length, 1);
+
+  const accepted = session.ingest({ distanceMeters: 0, street: '', turn: 'stop' });
+  assert.equal(accepted, true);
+  assert.deepEqual(session.getState(), {
+    distance: '0',
+    distanceUnit: 'm',
+    isArrived: false,
+    isNavigating: false,
+    statusText: 'Disconnected',
+    street: 'Ready',
+    turnIcon: '/common/turn_straight.png'
+  });
+  // No additional vibration triggered on stop
+  assert.equal(driver.calls.length, 1);
+});
+
 test('NavigationSession handles arrival case-insensitively', () => {
   const session = new NavigationSession();
 

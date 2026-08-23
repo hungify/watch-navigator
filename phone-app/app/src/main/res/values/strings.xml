@@ -21,4 +21,11 @@
     <string name="no_suggestions">No matching places found</string>
     <string name="retry">Retry</string>
     <string name="clear">Clear</string>
+    <string name="label_watch_status">Watch Connection</string>
+    <string name="watch_status_disconnected">Watch: Disconnected</string>
+    <string name="watch_status_connecting">Watch: Connecting...</string>
+    <string name="watch_status_connected">Watch: Connected (%1$s)</string>
+    <string name="watch_status_unauthorized">Watch: Permission Required</string>
+    <string name="watch_status_error">Watch: Error (%1$s)</string>
+    <string name="btn_connect_watch">Connect Watch</string>
 </resources>

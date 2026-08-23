@@ -60,6 +60,11 @@ export function getCanonicalTurn(turn) {
             return 'continue';
         case 'merge':
             return 'merge';
+        case 'stop':
+        case 'terminate':
+        case 'exit':
+        case 'reset':
+            return 'stop';
         default:
             return normalizedTurn || 'straight';
     }

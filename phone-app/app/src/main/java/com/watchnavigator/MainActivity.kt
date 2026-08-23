@@ -20,21 +20,22 @@ import com.google.android.libraries.places.api.Places
 import com.google.android.libraries.places.api.net.PlacesClient
 import com.watchnavigator.data.GoogleDirectionsService
 import com.watchnavigator.data.GooglePlacesSearchService
+import com.watchnavigator.data.HuaweiWearEngineService
 import com.watchnavigator.databinding.ActivityMainBinding
 import com.watchnavigator.model.LatLng
 import com.watchnavigator.model.TravelMode
+import com.watchnavigator.model.WatchConnectionState
 import com.watchnavigator.ui.MainViewModel
 import com.watchnavigator.ui.PlaceSuggestionsAdapter
 import com.watchnavigator.ui.RouteUiState
 import com.watchnavigator.ui.SuggestionsUiState
 import com.watchnavigator.ui.TurnStepsAdapter
 import com.watchnavigator.util.DistanceFormatter
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private var isNavigating = false
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var placesClient: PlacesClient? = null
@@ -48,7 +49,8 @@ class MainActivity : AppCompatActivity() {
             serverUrl = BuildConfig.NAV_SERVER_URL,
             serverToken = BuildConfig.NAV_SERVER_TOKEN
         )
-        MainViewModel.Factory(placesSearchService, directionsService)
+        val wearEngineService = HuaweiWearEngineService(applicationContext)
+        MainViewModel.Factory(placesSearchService, directionsService, wearEngineService)
     }
 
     private val locationPermissionLauncher = registerForActivityResult(
@@ -71,9 +73,7 @@ class MainActivity : AppCompatActivity() {
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-        if (savedInstanceState != null) {
-            isNavigating = savedInstanceState.getBoolean(KEY_IS_NAVIGATING, false)
-        }
+
 
         setupAdapters()
         setupUI()
@@ -93,10 +93,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        outState.putBoolean(KEY_IS_NAVIGATING, isNavigating)
-    }
+
 
     private fun setupAdapters() {
         suggestionsAdapter = PlaceSuggestionsAdapter { suggestion ->
@@ -128,9 +125,12 @@ class MainActivity : AppCompatActivity() {
             val mode = if (checkedId == R.id.rbWalking) TravelMode.WALKING else TravelMode.DRIVING
             viewModel.setTravelMode(mode)
         }
-
         binding.btnRetry.setOnClickListener {
             viewModel.retryRouteCalculation()
+        }
+
+        binding.btnConnectWatch.setOnClickListener {
+            viewModel.checkWatchConnection()
         }
 
         binding.btnNavigate.setOnClickListener {
@@ -210,7 +210,9 @@ class MainActivity : AppCompatActivity() {
                                     binding.cardSteps.visibility = View.GONE
                                 }
 
-                                binding.tvStatus.text = getString(R.string.status_route_ready)
+                                if (!viewModel.isNavigating.value) {
+                                    binding.tvStatus.text = getString(R.string.status_route_ready)
+                                }
                             }
                             is RouteUiState.Error -> {
                                 binding.layoutRouteLoading.visibility = View.GONE
@@ -223,6 +225,64 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+
+                launch {
+                    combine(
+                        viewModel.watchConnectionState,
+                        viewModel.watchSendError
+                    ) { connectionState, sendError ->
+                        connectionState to sendError
+                    }.collect { (state, sendError) ->
+                        updateWatchStatusUI(state, sendError)
+                    }
+                }
+
+                launch {
+                    viewModel.isNavigating.collect {
+                        updateNavigationUI()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateWatchStatusUI(state: WatchConnectionState, sendError: String?) {
+        if (sendError != null) {
+            binding.tvWatchStatus.text = getString(R.string.watch_status_error, sendError)
+            binding.btnConnectWatch.isEnabled = true
+            binding.btnConnectWatch.text = getString(R.string.retry)
+            return
+        }
+
+        when (state) {
+            is WatchConnectionState.Connecting -> {
+                binding.tvWatchStatus.text = getString(R.string.watch_status_connecting)
+                binding.btnConnectWatch.isEnabled = false
+            }
+            is WatchConnectionState.Connected -> {
+                binding.tvWatchStatus.text = getString(R.string.watch_status_connected, state.deviceName)
+                binding.btnConnectWatch.isEnabled = true
+                binding.btnConnectWatch.text = getString(R.string.btn_connect_watch)
+            }
+            is WatchConnectionState.Disconnected -> {
+                val reason = state.reason
+                binding.tvWatchStatus.text = if (reason.isNullOrBlank()) {
+                    getString(R.string.watch_status_disconnected)
+                } else {
+                    "${getString(R.string.watch_status_disconnected)} ($reason)"
+                }
+                binding.btnConnectWatch.isEnabled = true
+                binding.btnConnectWatch.text = getString(R.string.btn_connect_watch)
+            }
+            is WatchConnectionState.Unauthorized -> {
+                binding.tvWatchStatus.text = getString(R.string.watch_status_unauthorized)
+                binding.btnConnectWatch.isEnabled = true
+                binding.btnConnectWatch.text = getString(R.string.retry)
+            }
+            is WatchConnectionState.Error -> {
+                binding.tvWatchStatus.text = getString(R.string.watch_status_error, state.message)
+                binding.btnConnectWatch.isEnabled = true
+                binding.btnConnectWatch.text = getString(R.string.retry)
             }
         }
     }
@@ -256,13 +316,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        viewModel.checkWatchConnection()
+    }
+
     private fun toggleNavigation() {
-        isNavigating = !isNavigating
-        updateNavigationUI()
+        if (viewModel.isNavigating.value) {
+            viewModel.stopNavigation()
+        } else {
+            viewModel.startNavigation()
+        }
     }
 
     private fun updateNavigationUI() {
-        if (isNavigating) {
+        if (viewModel.isNavigating.value) {
             binding.tvStatus.text = getString(R.string.status_navigating)
             binding.btnNavigate.text = getString(R.string.btn_stop_navigation)
         } else {
@@ -273,7 +341,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        private const val KEY_IS_NAVIGATING = "key_is_navigating"
         val DEFAULT_LOCATION = LatLng(21.028511, 105.854167)
     }
 }
