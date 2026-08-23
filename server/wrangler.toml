@@ -1,0 +1,7 @@
+name = "watch-navigator-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Optional default environment variables (or configure via .dev.vars locally)

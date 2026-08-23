@@ -1,0 +1,8 @@
+# Local environment variables for Cloudflare Workers (wrangler dev)
+# Copy this file to .dev.vars (which is git-ignored)
+
+# Secret token required from Android phone-app (Authorization: Bearer <TOKEN> or X-API-Key)
+SERVER_AUTH_TOKEN=your_secret_auth_token
+
+# Private Google Maps Directions API key (kept on the worker)
+GOOGLE_DIRECTIONS_API_KEY=your_google_directions_api_key

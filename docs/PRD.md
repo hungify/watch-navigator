@@ -48,25 +48,23 @@ A single user: the project owner — riding a motorbike/car in the Hanoi area, w
 ## 5. System Architecture
 
 ```
-[Google Maps Platform API]
-         │  (Directions API / Places API)
-         ▼
-[Android Phone App – Kotlin]  ← FusedLocationProviderClient (GPS)
-         │
-         │  Wear Engine P2P (compact JSON — shared contract)
-         ▼
-[Watch App — one of two platform tracks, see 5.3]
-         │
-         ▼
-   Displays arrow + meters + vibration
+[Google Places SDK] <--- (Android-restricted: SHA-1 + pkg) --- [Android Phone App – Kotlin]  ← GPS
+                                                                       │              │
+                                                        (Auth Token)   │              │ Wear Engine P2P
+                                                                       ▼              │ (compact JSON)
+[Google Directions API] <--- (Server Secret / IP) --- [Directions Proxy Server]       ▼
+                                                                                [Watch App]
+                                                                                      │
+                                                                                      ▼
+                                                                           Displays arrow + meters + vibration
 ```
 
 The phone app and the JSON message contract (Section 5.2) are **watch-platform-agnostic** by design — they don't change based on which Huawei watch is paired. Only the watch-app implementation (Section 5.3) differs, because Huawei's watch lineup is split across two separate platforms/toolchains.
 
 ### 5.1. Component A — Phone App (Android/Kotlin)
 
-- Calls the **Directions API** to fetch the route (polyline + list of turn steps), passing `mode=driving` or `mode=walking` depending on the user's chosen travel mode.
-- Calls the **Places API (Autocomplete)** to look up destinations by name.
+- Calls the **Directions Proxy Server** (or directly via fallback) to fetch the route (polyline + list of turn steps), passing `mode=driving` or `mode=walking` depending on the user's chosen travel mode.
+- Calls the **Places API (Autocomplete)** via the native Places SDK using an Android-restricted API key (Package Name + SHA-1 fingerprint).
 - Uses `FusedLocationProviderClient` to get real-time GPS location, with a polling frequency that **adapts to the travel mode** (see Section 8 — Non-functional Requirements) — modeled on how popular navigation apps (Google Maps, Waze) operate: using `PRIORITY_HIGH_ACCURACY` during active navigation, with different frequencies for driving vs. walking.
 - Calculates the current position against the already-loaded route itself (matching coordinates to each "step" in the Directions response), **without repeatedly calling the Directions API** — it only calls again when the user deviates from the route beyond a threshold (e.g. >50m).
 - Sends a small data packet over Wear Engine whenever there's a meaningful change (X meters remaining to the next turn, a change in turn direction, etc.). This packet format is identical regardless of which watch platform is paired (see 5.2) — the phone app never needs to know or care which Huawei watch model it's talking to.
@@ -107,10 +105,19 @@ Huawei's watch lineup currently splits into **two distinct platforms with differ
 - Makes no internet calls of its own on either platform — only receives data via Wear Engine P2P from the phone.
 - Builds to a `.hap`, signed with a personal certificate via AppGallery Connect, installed via sideload (DevEco Assistant) for personal use — no public AppGallery publishing.
 
+### 5.4. Component D — Directions Proxy Server (`server/` — Cloudflare Workers + Hono)
+
+- A zero-cold-start, low-latency edge proxy built on **Hono** and **Zod** (Cloudflare Workers / TypeScript) that securely manages and holds the Google Directions API key.
+- Endpoints:
+  - `GET /health`: Health status and worker runtime metadata.
+  - `GET /api/v1/directions?origin=...&destination=...&mode=...`: Authenticated endpoint proxying directions requests to Google Directions API with Zod query validation.
+- Authentication: Validates `Authorization: Bearer <NAV_SERVER_TOKEN>` or `X-API-Key` with fail-closed security.
+- Security: Keeps the Directions Web Service API key off client devices. Allows restricting the Google API key to backend environment / Cloudflare IPs.
+
 ## 6. Main User Flow
 
 1. The user opens the phone app → selects a travel mode (walking/motorbike-driving) → enters or picks a destination (Places Autocomplete).
-2. The app calls the Directions API with the corresponding mode → receives the route + list of turn steps.
+2. The app calls the Directions Proxy Server (with auth token) with the corresponding mode → receives the route + list of turn steps.
 3. The app sends the first turn step to the watch via Wear Engine.
 4. The user starts moving and puts the phone away.
 5. The phone app tracks GPS in the background, calculating the remaining distance to the next turn.
@@ -123,13 +130,13 @@ Huawei's watch lineup currently splits into **two distinct platforms with differ
 | ID   | Requirement                     | Description                                                                                                                                                                                                   |
 | ---- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | FR1  | Destination search              | Text input, place suggestions via Places Autocomplete                                                                                                                                                         |
-| FR2  | Route calculation               | Call the Directions API, parse the list of "steps" (turn direction, distance, street name)                                                                                                                    |
+| FR2  | Route calculation               | Call the Directions Proxy Server / API, parse the list of "steps" (turn direction, distance, street name)                                                                                                    |
 | FR3  | Background location tracking    | Poll GPS at a frequency adapted to travel mode (see Section 8), including while the app runs in the background                                                                                                |
 | FR4  | Remaining distance calculation  | Match the current position against the nearest step on the route                                                                                                                                              |
 | FR5  | Send data to the watch          | Via Wear Engine P2P, lightweight JSON format                                                                                                                                                                  |
 | FR6  | Display directions on the watch | Arrow, distance in meters, street name                                                                                                                                                                        |
 | FR7  | Vibration alerts                | Vibrate when a new turn step appears or the turn is near, based on the configured distance threshold                                                                                                          |
-| FR8  | Automatic route recalculation   | Call the Directions API again when the user deviates from the route beyond the threshold                                                                                                                      |
+| FR8  | Automatic route recalculation   | Call the Directions Proxy Server / API again when the user deviates from the route beyond the threshold                                                                                                      |
 | FR9  | Trip-completion notification    | Display "arrived" on the watch                                                                                                                                                                                |
 | FR10 | Travel mode selection           | Toggle driving/walking before starting a trip, affecting the mode passed to the Directions API and the GPS polling frequency                                                                                  |
 | FR11 | Settings screen                 | Allows adjusting the vibration-trigger distance threshold (default 150m/50m), persisted between app sessions                                                                                                  |
@@ -144,7 +151,7 @@ Huawei's watch lineup currently splits into **two distinct platforms with differ
 | GPS frequency (finalized based on real-world practice from Google Maps/Waze) | **Driving**: `FusedLocationProviderClient` with `PRIORITY_HIGH_ACCURACY`, ~1-second interval during active navigation. **Walking**: 3–5 second interval (slower movement speed, no need for rapid updates) — accurate enough while saving battery. Uses `setSmallestDisplacement` to skip updates while stationary. |
 | Latency                                                                      | From GPS update to watch display: under ~2 seconds                                                                                                                                                                                                                                                                  |
 | Connection reliability                                                       | Handles temporary Bluetooth disconnects between phone and watch (retry, no crashes)                                                                                                                                                                                                                                 |
-| Security                                                                     | Google Maps API key restricted by package name/SHA-1 cert, never hard-coded or exposed                                                                                                                                                                                                                              |
+| Security                                                                     | Two-tier API key security: (1) Places SDK restricted by Android Package Name + SHA-1 fingerprint; (2) Directions API key kept secret on the Backend Proxy Server and never embedded in the client APK.                                                                                                            |
 
 ## 9. Dependencies & Technical Constraints
 
@@ -153,6 +160,7 @@ Huawei's watch lineup currently splits into **two distinct platforms with differ
 - Huawei watches have no independent SIM/WiFi in most configurations → all internet requests must go through the phone.
 - The Huawei Health app must be installed on the phone, with the target watch paired through it (a hard requirement of Wear Engine, regardless of platform).
 - Watch apps can only be installed via personal sideload (DevEco Assistant, or DevEco Studio direct deploy) — not easily distributed to other people, on either platform.
+- **Backend proxy**: Cloudflare Workers with **Hono** framework and **Zod** schema validation (TypeScript) edge function with zero cold-starts, deployable on Cloudflare's free tier (100,000 requests/day).
 - **Toolchain note:** the GT-series (Lite Wearable) track uses standard Gradle with Huawei's Lite Wearable plugin; a future HarmonyOS NEXT track would use Hvigor instead. These are separate `watch-app-*/` modules within the monorepo, not a shared build — confirm exact tooling against the generated project before scaffolding each, since Huawei's tooling has shifted over time.
 
 ## 10. Estimated Costs
