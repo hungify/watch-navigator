@@ -1,5 +1,11 @@
 # Local configuration template - DO NOT commit local.properties to version control
 # Copy this file to local.properties and fill in your actual credentials.
 
-# Google Maps Platform API Key (used for Places Autocomplete and Directions API)
+# Google Maps Platform API Key (used for Places Autocomplete and direct Directions API fallback)
 MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE
+
+# Cloudflare Workers Directions Proxy Server Configuration (recommended)
+# Base URL of your Cloudflare Workers directions proxy edge worker (e.g. https://watch-navigator-proxy.your-subdomain.workers.dev)
+NAV_SERVER_URL=
+# Secret authentication token matching SERVER_AUTH_TOKEN on your proxy worker
+NAV_SERVER_TOKEN=

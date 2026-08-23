@@ -43,7 +43,11 @@ class MainActivity : AppCompatActivity() {
 
     private val viewModel: MainViewModel by viewModels {
         val placesSearchService = GooglePlacesSearchService(placesClient)
-        val directionsService = GoogleDirectionsService(BuildConfig.MAPS_API_KEY)
+        val directionsService = GoogleDirectionsService(
+            apiKey = BuildConfig.MAPS_API_KEY,
+            serverUrl = BuildConfig.NAV_SERVER_URL,
+            serverToken = BuildConfig.NAV_SERVER_TOKEN
+        )
         MainViewModel.Factory(placesSearchService, directionsService)
     }
 
