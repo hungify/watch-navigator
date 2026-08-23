@@ -2,6 +2,7 @@ package com.watchnavigator
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,6 +26,7 @@ import com.watchnavigator.databinding.ActivityMainBinding
 import com.watchnavigator.model.LatLng
 import com.watchnavigator.model.TravelMode
 import com.watchnavigator.model.WatchConnectionState
+import com.watchnavigator.service.NavigationForegroundService
 import com.watchnavigator.ui.MainViewModel
 import com.watchnavigator.ui.PlaceSuggestionsAdapter
 import com.watchnavigator.ui.RouteUiState
@@ -33,6 +35,7 @@ import com.watchnavigator.ui.TurnStepsAdapter
 import com.watchnavigator.util.DistanceFormatter
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -53,7 +56,7 @@ class MainActivity : AppCompatActivity() {
         MainViewModel.Factory(placesSearchService, directionsService, wearEngineService)
     }
 
-    private val locationPermissionLauncher = registerForActivityResult(
+    private val permissionsLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
@@ -73,12 +76,10 @@ class MainActivity : AppCompatActivity() {
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
-
-
         setupAdapters()
         setupUI()
         observeViewModel()
-        checkLocationPermissionAndFetch()
+        checkPermissionsAndFetchLocation()
     }
 
     private fun initPlacesSdk() {
@@ -92,8 +93,6 @@ class MainActivity : AppCompatActivity() {
             placesClient = Places.createClient(this)
         }
     }
-
-
 
     private fun setupAdapters() {
         suggestionsAdapter = PlaceSuggestionsAdapter { suggestion ->
@@ -125,6 +124,7 @@ class MainActivity : AppCompatActivity() {
             val mode = if (checkedId == R.id.rbWalking) TravelMode.WALKING else TravelMode.DRIVING
             viewModel.setTravelMode(mode)
         }
+
         binding.btnRetry.setOnClickListener {
             viewModel.retryRouteCalculation()
         }
@@ -181,7 +181,7 @@ class MainActivity : AppCompatActivity() {
                                 binding.cardRouteOverview.visibility = View.GONE
                                 binding.cardSteps.visibility = View.GONE
                                 binding.cardError.visibility = View.GONE
-                                updateNavigationUI()
+                                updateNavigationUI(viewModel.isNavigating.value)
                             }
                             is RouteUiState.Loading -> {
                                 binding.layoutRouteLoading.visibility = View.VISIBLE
@@ -238,8 +238,38 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 launch {
-                    viewModel.isNavigating.collect {
-                        updateNavigationUI()
+                    viewModel.isNavigating.collect { isNavigating ->
+                        updateNavigationUI(isNavigating)
+                        if (!isNavigating) {
+                            stepsAdapter.clearActiveStep()
+                        }
+                    }
+                }
+
+                launch {
+                    var lastScrolledStepIndex = -1
+                    viewModel.navigationProgress.collect { progress ->
+                        if (progress != null && viewModel.isNavigating.value) {
+                            if (progress.isArrived) {
+                                binding.tvStatus.text = getString(R.string.notification_arrived)
+                                stepsAdapter.setActiveStep(progress.currentStepIndex, 0)
+                            } else {
+                                val distStr = DistanceFormatter.formatDistance(progress.remainingDistanceToNextTurnMeters)
+                                binding.tvStatus.text = getString(
+                                    R.string.notification_turn_instruction,
+                                    distStr,
+                                    progress.currentStep.instruction
+                                )
+                                stepsAdapter.setActiveStep(
+                                    progress.currentStepIndex,
+                                    progress.remainingDistanceToNextTurnMeters
+                                )
+                                if (progress.currentStepIndex != lastScrolledStepIndex) {
+                                    lastScrolledStepIndex = progress.currentStepIndex
+                                    binding.rvSteps.smoothScrollToPosition(progress.currentStepIndex)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -287,19 +317,41 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkLocationPermissionAndFetch() {
-        val fineLocation = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-        val coarseLocation = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+    private fun checkPermissionsAndFetchLocation() {
+        val permissionsToRequest = mutableListOf<String>()
 
-        if (fineLocation == PackageManager.PERMISSION_GRANTED || coarseLocation == PackageManager.PERMISSION_GRANTED) {
+        val fineLocationGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarseLocationGranted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (!fineLocationGranted) {
+            permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        if (!coarseLocationGranted) {
+            permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val notificationGranted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!notificationGranted) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        if (fineLocationGranted || coarseLocationGranted) {
             fetchDeviceLocation()
-        } else {
-            locationPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            permissionsLauncher.launch(permissionsToRequest.toTypedArray())
         }
     }
 
@@ -324,13 +376,17 @@ class MainActivity : AppCompatActivity() {
     private fun toggleNavigation() {
         if (viewModel.isNavigating.value) {
             viewModel.stopNavigation()
+            NavigationForegroundService.stop(this)
         } else {
             viewModel.startNavigation()
+            if (viewModel.isNavigating.value) {
+                NavigationForegroundService.start(this)
+            }
         }
     }
 
-    private fun updateNavigationUI() {
-        if (viewModel.isNavigating.value) {
+    private fun updateNavigationUI(isNavigating: Boolean) {
+        if (isNavigating) {
             binding.tvStatus.text = getString(R.string.status_navigating)
             binding.btnNavigate.text = getString(R.string.btn_stop_navigation)
         } else {

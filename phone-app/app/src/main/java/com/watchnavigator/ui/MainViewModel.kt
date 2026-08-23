@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.watchnavigator.data.DirectionsService
 import com.watchnavigator.data.PlacesSearchService
 import com.watchnavigator.data.WearEngineService
+import com.watchnavigator.engine.NavigationProgress
+import com.watchnavigator.engine.NavigationSessionManager
 import com.watchnavigator.model.LatLng
 import com.watchnavigator.model.NavRoute
 import com.watchnavigator.model.PlaceSuggestion
@@ -41,7 +43,8 @@ sealed class RouteUiState {
 class MainViewModel(
     private val placesSearchService: PlacesSearchService,
     private val directionsService: DirectionsService,
-    private val wearEngineService: WearEngineService? = null
+    private val wearEngineService: WearEngineService? = null,
+    val sessionManager: NavigationSessionManager = NavigationSessionManager.getInstance(wearEngineService)
 ) : ViewModel() {
 
     private val _queryFlow = MutableStateFlow("")
@@ -65,26 +68,25 @@ class MainViewModel(
     private val _routeState = MutableStateFlow<RouteUiState>(RouteUiState.Idle)
     val routeState: StateFlow<RouteUiState> = _routeState.asStateFlow()
 
-    private val _isNavigating = MutableStateFlow(false)
-    val isNavigating: StateFlow<Boolean> = _isNavigating.asStateFlow()
+    val isNavigating: StateFlow<Boolean> = sessionManager.isNavigating
+    val navigationProgress: StateFlow<NavigationProgress?> = sessionManager.navigationProgress
+    val lastSentWatchMessage: StateFlow<WatchNavMessage?> = sessionManager.lastSentWatchMessage
+    val watchSendError: StateFlow<String?> = sessionManager.watchSendError
 
     private val _currentStepIndex = MutableStateFlow(0)
     val currentStepIndex: StateFlow<Int> = _currentStepIndex.asStateFlow()
 
-    private val _lastSentWatchMessage = MutableStateFlow<WatchNavMessage?>(null)
-    val lastSentWatchMessage: StateFlow<WatchNavMessage?> = _lastSentWatchMessage.asStateFlow()
-
-    private val _watchSendError = MutableStateFlow<String?>(null)
-    val watchSendError: StateFlow<String?> = _watchSendError.asStateFlow()
-
     val watchConnectionState: StateFlow<WatchConnectionState> =
         wearEngineService?.connectionState ?: MutableStateFlow(WatchConnectionState.Disconnected()).asStateFlow()
+
     private var searchJob: Job? = null
     private var selectJob: Job? = null
     private var routeJob: Job? = null
     private var watchConnectionJob: Job? = null
 
     init {
+        sessionManager.setWearEngineService(wearEngineService)
+
         _queryFlow
             .debounce(300)
             .distinctUntilChanged()
@@ -98,11 +100,20 @@ class MainViewModel(
             .launchIn(viewModelScope)
 
         checkWatchConnection()
+
+        // Keep local step index synced with session progress
+        viewModelScope.launch {
+            sessionManager.navigationProgress.collect { progress ->
+                if (progress != null) {
+                    _currentStepIndex.value = progress.currentStepIndex
+                }
+            }
+        }
     }
 
     fun checkWatchConnection() {
         if (watchConnectionJob?.isActive == true) return
-        _watchSendError.value = null
+        sessionManager.clearWatchSendError()
         watchConnectionJob = viewModelScope.launch {
             wearEngineService?.checkConnection()
         }
@@ -174,7 +185,10 @@ class MainViewModel(
     fun setCurrentLocation(latLng: LatLng) {
         val prev = _currentLocation.value
         _currentLocation.value = latLng
-        // If route is already displayed or was pending/errored due to missing GPS, calculate now
+        if (sessionManager.isNavigating.value) {
+            sessionManager.onLocationUpdate(latLng)
+        }
+        // If route was pending due to missing GPS, calculate now
         if (prev == null && (_destinationLatLng.value != null || _selectedDestination.value != null)) {
             fetchRouteForSelectedDestination(_destinationLatLng.value, _selectedDestination.value?.placeId)
         }
@@ -218,16 +232,13 @@ class MainViewModel(
     fun startNavigation() {
         val currentRouteState = _routeState.value
         if (currentRouteState is RouteUiState.Success && currentRouteState.route.steps.isNotEmpty()) {
-            _isNavigating.value = true
-            _currentStepIndex.value = 0
-            sendCurrentStepToWatch()
+            val destName = _selectedDestination.value?.primaryText ?: currentRouteState.route.destinationAddress
+            sessionManager.startSession(currentRouteState.route, _travelMode.value, destName)
         }
     }
 
     fun stopNavigation() {
-        _isNavigating.value = false
-        _currentStepIndex.value = 0
-        sendWatchMessage(WatchNavMessage.stop())
+        sessionManager.stopSession()
     }
 
     fun updateNavigationStep(stepIndex: Int, remainingDistanceMeters: Int? = null) {
@@ -236,7 +247,7 @@ class MainViewModel(
             val steps = currentRouteState.route.steps
             if (stepIndex in steps.indices) {
                 _currentStepIndex.value = stepIndex
-                if (_isNavigating.value) {
+                if (isNavigating.value) {
                     dispatchStepAt(steps, stepIndex, remainingDistanceMeters)
                 }
             }
@@ -258,30 +269,13 @@ class MainViewModel(
         val step = steps[index]
         val dist = remainingDistanceMeters ?: step.distanceMeters
         val msg = WatchNavMessage.fromNavStep(step, dist)
-        sendWatchMessage(msg)
+        sessionManager.sendWatchMessage(msg)
     }
 
     fun sendArrivalToWatch() {
         val destName = _selectedDestination.value?.primaryText ?: ""
         val msg = WatchNavMessage.arrival(destName)
-        sendWatchMessage(msg)
-    }
-    private fun sendWatchMessage(msg: WatchNavMessage) {
-        viewModelScope.launch {
-            val service = wearEngineService
-            if (service != null) {
-                val result = service.sendNavMessage(msg)
-                result.onSuccess {
-                    _lastSentWatchMessage.value = msg
-                    _watchSendError.value = null
-                }.onFailure { error ->
-                    _watchSendError.value = error.message ?: "Failed to send message to watch"
-                }
-            } else {
-                _lastSentWatchMessage.value = msg
-                _watchSendError.value = null
-            }
-        }
+        sessionManager.sendWatchMessage(msg)
     }
 
     fun dismissError() {
@@ -301,12 +295,14 @@ class MainViewModel(
     class Factory(
         private val placesSearchService: PlacesSearchService,
         private val directionsService: DirectionsService,
-        private val wearEngineService: WearEngineService? = null
+        private val wearEngineService: WearEngineService? = null,
+        private val sessionManager: NavigationSessionManager? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
-                return MainViewModel(placesSearchService, directionsService, wearEngineService) as T
+                val sm = sessionManager ?: NavigationSessionManager.getInstance(wearEngineService)
+                return MainViewModel(placesSearchService, directionsService, wearEngineService, sm) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
