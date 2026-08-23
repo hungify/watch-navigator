@@ -11,7 +11,9 @@ import {
 const INITIAL_STATE: Readonly<WatchPageState> = Object.freeze({
   distance: '0',
   distanceUnit: 'm',
+  hasConnectionWarning: false,
   isArrived: false,
+  isConnected: false,
   isNavigating: false,
   statusText: 'Disconnected',
   street: 'Ready',
@@ -68,13 +70,14 @@ export class NavigationSession {
     this.state = {
       distance: formattedDistance.value,
       distanceUnit: formattedDistance.unit,
+      hasConnectionWarning: false,
       isArrived,
+      isConnected: true,
       isNavigating: true,
       statusText: isArrived ? 'Arrived' : 'Navigating',
       street: resolvedStreet,
       turnIcon
     };
-
     if (isArrivalTransition) {
       this.haptics.vibrateArrival();
     } else if (!isArrived && (isFirstUpdate || hasPromptChanged)) {
@@ -85,6 +88,35 @@ export class NavigationSession {
     this.lastStreet = resolvedStreet;
 
     return true;
+  }
+  handleConnect(): void {
+    let status = 'Connected';
+    if (this.state.isNavigating) {
+      status = this.state.isArrived ? 'Arrived' : 'Navigating';
+    }
+    this.state = {
+      ...this.state,
+      hasConnectionWarning: false,
+      isConnected: true,
+      statusText: status
+    };
+  }
+
+  handleDisconnect(): void {
+    this.state = {
+      ...this.state,
+      hasConnectionWarning: this.state.isNavigating,
+      isConnected: false,
+      statusText: 'Disconnected'
+    };
+  }
+
+  handleReconnect(): void {
+    this.handleConnect();
+  }
+
+  isOfflineCached(): boolean {
+    return this.state.isNavigating && !this.state.isConnected;
   }
 
   reset(): void {

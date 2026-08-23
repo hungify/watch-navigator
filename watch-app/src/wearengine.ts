@@ -3,9 +3,19 @@ import type { NavigationPayload } from './types.ts';
 import { isValidNavigationPayload } from './types.ts';
 
 export type RawMessageHandler = (data: unknown) => void;
+export type WearEngineConnectionCallback = (connected: boolean) => void;
 export type WearEngineMessageCallback = (payload: NavigationPayload) => void;
+export const DEFAULT_INACTIVITY_TIMEOUT_MS = 15000;
 
+export type TimerHandle = number | NodeJS.Timeout;
+
+export interface WearEngineReceiverOptions {
+  inactivityTimeoutMs?: number;
+  onConnectionChange?: WearEngineConnectionCallback;
+  onMessage?: WearEngineMessageCallback;
+}
 export interface WearEngineDriver {
+  onConnectionStateChange?(handler: WearEngineConnectionCallback): () => void;
   send?(data: unknown): Promise<void> | void;
   subscribe(handler: RawMessageHandler): (() => void) | void;
   unsubscribe?(handler?: RawMessageHandler): void;
@@ -165,28 +175,73 @@ function decodeRawData(raw: unknown): unknown {
 }
 
 export class WearEngineReceiver {
+  private cleanupConnectionSubscription: (() => void) | null = null;
   private cleanupSubscription: (() => void) | null = null;
+  private connectionListeners: Set<WearEngineConnectionCallback> = new Set();
   private driver: WearEngineDriver | null;
+  private inactivityTimeoutMs: number = 0;
+  private isConnected: boolean = false;
   private listeners: Set<WearEngineMessageCallback> = new Set();
-
-  constructor(driver?: null | WearEngineDriver, onMessageCallback?: WearEngineMessageCallback) {
+  private watchdogTimer: null | TimerHandle = null;
+  constructor(
+    driver?: null | WearEngineDriver,
+    onMessageOrCallbackOrOptions?: WearEngineMessageCallback | WearEngineReceiverOptions,
+    options?: WearEngineReceiverOptions
+  ) {
     if (driver !== undefined) {
       this.driver = driver;
     } else {
       this.driver = resolveSystemWearEngineDriver();
     }
 
-    if (onMessageCallback) {
-      this.listeners.add(onMessageCallback);
+    let opts: undefined | WearEngineReceiverOptions = options;
+    if (typeof onMessageOrCallbackOrOptions === 'function') {
+      this.listeners.add(onMessageOrCallbackOrOptions);
+    } else if (onMessageOrCallbackOrOptions && typeof onMessageOrCallbackOrOptions === 'object') {
+      opts = onMessageOrCallbackOrOptions;
+    }
+
+    if (opts) {
+      if (opts.inactivityTimeoutMs && opts.inactivityTimeoutMs > 0) {
+        this.inactivityTimeoutMs = opts.inactivityTimeoutMs;
+      }
+      if (opts.onMessage) {
+        this.listeners.add(opts.onMessage);
+      }
+      if (opts.onConnectionChange) {
+        this.connectionListeners.add(opts.onConnectionChange);
+      }
     }
   }
 
+  getIsConnected(): boolean {
+    return this.isConnected;
+  }
+
   handleRawMessage(raw: unknown): boolean {
-    const payload = this.parsePayload(raw);
+    const candidate = decodeRawData(raw);
+
+    // Check for explicit disconnect or connection event payloads
+    if (candidate && typeof candidate === 'object') {
+      const obj = candidate as Record<string, unknown>;
+      if (obj.event === 'disconnect' || obj.type === 'disconnect' || obj.connected === false) {
+        this.notifyConnectionChange(false);
+        return true;
+      }
+      if (obj.event === 'connect' || obj.type === 'connect' || obj.connected === true) {
+        this.notifyConnectionChange(true);
+        if (!isValidNavigationPayload(candidate)) {
+          return true;
+        }
+      }
+    }
+
+    const payload = this.parsePayload(candidate);
     if (!payload) {
       return false;
     }
 
+    this.notifyConnectionChange(true);
     for (const listener of this.listeners) {
       try {
         listener(payload);
@@ -201,11 +256,22 @@ export class WearEngineReceiver {
     return this.cleanupSubscription !== null;
   }
 
+  onConnectionChange(callback: WearEngineConnectionCallback): () => void {
+    this.connectionListeners.add(callback);
+    return () => {
+      this.connectionListeners.delete(callback);
+    };
+  }
+
   onMessage(callback: WearEngineMessageCallback): () => void {
     this.listeners.add(callback);
     return () => {
       this.listeners.delete(callback);
     };
+  }
+
+  setConnected(connected: boolean): void {
+    this.notifyConnectionChange(connected);
   }
 
   start(): void {
@@ -226,9 +292,19 @@ export class WearEngineReceiver {
               this.driver.unsubscribe(boundHandler);
             }
           };
+
+    if (typeof this.driver.onConnectionStateChange === 'function') {
+      const connCleanup = this.driver.onConnectionStateChange((connected: boolean) => {
+        this.notifyConnectionChange(connected);
+      });
+      if (typeof connCleanup === 'function') {
+        this.cleanupConnectionSubscription = connCleanup;
+      }
+    }
   }
 
   stop(): void {
+    this.clearWatchdog();
     if (this.cleanupSubscription) {
       try {
         this.cleanupSubscription();
@@ -237,10 +313,53 @@ export class WearEngineReceiver {
       }
       this.cleanupSubscription = null;
     }
+    if (this.cleanupConnectionSubscription) {
+      try {
+        this.cleanupConnectionSubscription();
+      } catch (err) {
+        console.warn('Error unsubscribing WearEngine connection driver:', err);
+      }
+      this.cleanupConnectionSubscription = null;
+    }
+  }
+
+  private clearWatchdog(): void {
+    if (this.watchdogTimer !== null) {
+      clearTimeout(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+  }
+
+  private notifyConnectionChange(connected: boolean): void {
+    if (connected) {
+      this.resetWatchdog();
+    } else {
+      this.clearWatchdog();
+    }
+
+    if (this.isConnected === connected) {
+      return;
+    }
+    this.isConnected = connected;
+    for (const listener of this.connectionListeners) {
+      try {
+        listener(connected);
+      } catch (err) {
+        console.warn('Error in WearEngine connection listener:', err);
+      }
+    }
   }
 
   private parsePayload(raw: unknown): NavigationPayload | null {
-    const candidate = decodeRawData(raw);
-    return isValidNavigationPayload(candidate) ? candidate : null;
+    return isValidNavigationPayload(raw) ? raw : null;
+  }
+
+  private resetWatchdog(): void {
+    this.clearWatchdog();
+    if (this.inactivityTimeoutMs > 0) {
+      this.watchdogTimer = setTimeout(() => {
+        this.notifyConnectionChange(false);
+      }, this.inactivityTimeoutMs);
+    }
   }
 }

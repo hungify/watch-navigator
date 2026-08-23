@@ -3,7 +3,9 @@ import { formatDistance, getCanonicalTurn, getTurnIcon, isValidNavigationPayload
 const INITIAL_STATE = Object.freeze({
     distance: '0',
     distanceUnit: 'm',
+    hasConnectionWarning: false,
     isArrived: false,
+    isConnected: false,
     isNavigating: false,
     statusText: 'Disconnected',
     street: 'Ready',
@@ -50,7 +52,9 @@ export class NavigationSession {
         this.state = {
             distance: formattedDistance.value,
             distanceUnit: formattedDistance.unit,
+            hasConnectionWarning: false,
             isArrived,
+            isConnected: true,
             isNavigating: true,
             statusText: isArrived ? 'Arrived' : 'Navigating',
             street: resolvedStreet,
@@ -65,6 +69,32 @@ export class NavigationSession {
         this.lastTurn = canonicalTurn;
         this.lastStreet = resolvedStreet;
         return true;
+    }
+    handleConnect() {
+        let status = 'Connected';
+        if (this.state.isNavigating) {
+            status = this.state.isArrived ? 'Arrived' : 'Navigating';
+        }
+        this.state = {
+            ...this.state,
+            hasConnectionWarning: false,
+            isConnected: true,
+            statusText: status
+        };
+    }
+    handleDisconnect() {
+        this.state = {
+            ...this.state,
+            hasConnectionWarning: this.state.isNavigating,
+            isConnected: false,
+            statusText: 'Disconnected'
+        };
+    }
+    handleReconnect() {
+        this.handleConnect();
+    }
+    isOfflineCached() {
+        return this.state.isNavigating && !this.state.isConnected;
     }
     reset() {
         this.state = { ...INITIAL_STATE };

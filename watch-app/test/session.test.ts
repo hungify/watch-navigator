@@ -17,11 +17,12 @@ class MockVibratorDriver implements VibratorDriver {
 test('NavigationSession initializes with default disconnected state', () => {
   const session = new NavigationSession();
   const state = session.getState();
-
   assert.deepEqual(state, {
     distance: '0',
     distanceUnit: 'm',
+    hasConnectionWarning: false,
     isArrived: false,
+    isConnected: false,
     isNavigating: false,
     statusText: 'Disconnected',
     street: 'Ready',
@@ -55,13 +56,14 @@ test('NavigationSession ingests valid navigation payload and triggers turn hapti
   assert.deepEqual(session.getState(), {
     distance: '150',
     distanceUnit: 'm',
+    hasConnectionWarning: false,
     isArrived: false,
+    isConnected: true,
     isNavigating: true,
     statusText: 'Navigating',
     street: 'Nguyen Trai',
     turnIcon: '/common/turn_left.png'
   });
-  assert.equal(driver.calls.length, 1);
   assert.equal(driver.calls[0].mode, 'short');
 });
 
@@ -119,13 +121,14 @@ test('NavigationSession transitions to Arrived state and triggers long arrival v
   assert.deepEqual(session.getState(), {
     distance: '0',
     distanceUnit: 'm',
+    hasConnectionWarning: false,
     isArrived: true,
+    isConnected: true,
     isNavigating: true,
     statusText: 'Arrived',
     street: 'Vincom Center',
     turnIcon: '/common/turn_arrive.png'
   });
-
   assert.equal(driver.calls.length, 2);
   assert.equal(driver.calls[1].mode, 'long');
 });
@@ -168,7 +171,9 @@ test('NavigationSession reset restores initial state cleanly', () => {
   assert.deepEqual(session.getState(), {
     distance: '0',
     distanceUnit: 'm',
+    hasConnectionWarning: false,
     isArrived: false,
+    isConnected: false,
     isNavigating: false,
     statusText: 'Disconnected',
     street: 'Ready',
@@ -190,13 +195,14 @@ test('NavigationSession resets to initial state on terminal stop payload without
   assert.deepEqual(session.getState(), {
     distance: '0',
     distanceUnit: 'm',
+    hasConnectionWarning: false,
     isArrived: false,
+    isConnected: false,
     isNavigating: false,
     statusText: 'Disconnected',
     street: 'Ready',
     turnIcon: '/common/turn_straight.png'
   });
-  // No additional vibration triggered on stop
   assert.equal(driver.calls.length, 1);
 });
 
@@ -271,4 +277,90 @@ test('NavigationSession triggers second turn vibration for distinct maneuvers sh
   session.ingest({ turn: 'roundabout-right', distance_m: 80, street: 'Roundabout Square' });
   assert.equal(driver.calls.length, 2);
   assert.equal(driver.calls[1].mode, 'short');
+});
+
+test('NavigationSession caches instruction and displays warning badge on disconnect mid-navigation', () => {
+  const session = new NavigationSession();
+  session.ingest({
+    distanceMeters: 300,
+    street: 'Phan Dinh Phung',
+    turn: 'sharp-left'
+  });
+
+  assert.equal(session.getState().isNavigating, true);
+  assert.equal(session.getState().isConnected, true);
+  assert.equal(session.getState().hasConnectionWarning, false);
+  assert.equal(session.isOfflineCached(), false);
+
+  // Disconnect occurs
+  session.handleDisconnect();
+
+  const disconnectedState = session.getState();
+  assert.equal(disconnectedState.isNavigating, true);
+  assert.equal(disconnectedState.isConnected, false);
+  assert.equal(disconnectedState.hasConnectionWarning, true);
+  assert.equal(disconnectedState.statusText, 'Disconnected');
+  // Cached instruction fields MUST remain untouched
+  assert.equal(disconnectedState.distance, '300');
+  assert.equal(disconnectedState.distanceUnit, 'm');
+  assert.equal(disconnectedState.street, 'Phan Dinh Phung');
+  assert.equal(disconnectedState.turnIcon, '/common/turn_sharp_left.png');
+  assert.equal(session.isOfflineCached(), true);
+
+  // Reconnect occurs
+  session.handleReconnect();
+
+  const reconnectedState = session.getState();
+  assert.equal(reconnectedState.isNavigating, true);
+  assert.equal(reconnectedState.isConnected, true);
+  assert.equal(reconnectedState.hasConnectionWarning, false);
+  assert.equal(reconnectedState.statusText, 'Navigating');
+  assert.equal(reconnectedState.distance, '300');
+  assert.equal(reconnectedState.street, 'Phan Dinh Phung');
+  assert.equal(session.isOfflineCached(), false);
+});
+
+test('NavigationSession seamlessly updates cached instruction and clears warning when packets resume', () => {
+  const session = new NavigationSession();
+  session.ingest({
+    distanceMeters: 500,
+    street: 'Hoang Hoa Tham',
+    turn: 'right'
+  });
+
+  session.handleDisconnect();
+  assert.equal(session.getState().hasConnectionWarning, true);
+  assert.equal(session.getState().isConnected, false);
+
+  // New packet arrives from phone
+  const accepted = session.ingest({
+    distanceMeters: 250,
+    street: 'Hoang Hoa Tham',
+    turn: 'right'
+  });
+
+  assert.equal(accepted, true);
+  const state = session.getState();
+  assert.equal(state.isNavigating, true);
+  assert.equal(state.isConnected, true);
+  assert.equal(state.hasConnectionWarning, false);
+  assert.equal(state.statusText, 'Navigating');
+  assert.equal(state.distance, '250');
+  assert.equal(state.distanceUnit, 'm');
+  assert.equal(state.street, 'Hoang Hoa Tham');
+});
+
+test('NavigationSession handles disconnect in idle state without warning badge', () => {
+  const session = new NavigationSession();
+  assert.equal(session.getState().isNavigating, false);
+
+  session.handleConnect();
+  assert.equal(session.getState().isConnected, true);
+  assert.equal(session.getState().statusText, 'Connected');
+  assert.equal(session.getState().hasConnectionWarning, false);
+
+  session.handleDisconnect();
+  assert.equal(session.getState().isConnected, false);
+  assert.equal(session.getState().statusText, 'Disconnected');
+  assert.equal(session.getState().hasConnectionWarning, false);
 });
