@@ -1,11 +1,13 @@
 export function getTurnIcon(turn) {
-    const normalizedTurn = (turn || '').toLowerCase();
+    const normalizedTurn = (turn || '').trim().toLowerCase().replace(/_/g, '-');
     switch (normalizedTurn) {
         case 'left':
         case 'turn-left':
+        case 'sharp-left':
             return '←';
         case 'right':
         case 'turn-right':
+        case 'sharp-right':
             return '→';
         case 'slight-left':
             return '↖';
