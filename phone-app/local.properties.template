@@ -1,0 +1,5 @@
+# Local configuration template - DO NOT commit local.properties to version control
+# Copy this file to local.properties and fill in your actual credentials.
+
+# Google Maps Platform API Key (used for Places Autocomplete and Directions API)
+MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE

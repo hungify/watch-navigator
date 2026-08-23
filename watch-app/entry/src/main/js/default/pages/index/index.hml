@@ -1,0 +1,23 @@
+<div class="container">
+    <div class="header">
+        <text class="status-text">{{ statusText }}</text>
+    </div>
+
+    <div class="navigation-content" show="{{ isNavigating }}">
+        <div class="arrow-container">
+            <text class="arrow-icon">{{ turnIcon }}</text>
+        </div>
+        <div class="distance-container">
+            <text class="distance-value">{{ distance }}</text>
+            <text class="distance-unit">m</text>
+        </div>
+        <div class="street-container">
+            <text class="street-name">{{ street }}</text>
+        </div>
+    </div>
+
+    <div class="idle-content" show="{{ !isNavigating }}">
+        <text class="idle-title">Watch Navigator</text>
+        <text class="idle-subtitle">Ready for phone connection</text>
+    </div>
+</div>

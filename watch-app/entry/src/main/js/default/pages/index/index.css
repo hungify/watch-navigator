@@ -1,0 +1,98 @@
+.container {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 454px;
+    height: 454px;
+    background-color: #000000;
+}
+
+.header {
+    margin-top: 20px;
+    height: 30px;
+    justify-content: center;
+    align-items: center;
+}
+
+.status-text {
+    font-size: 20px;
+    color: #888888;
+    text-align: center;
+}
+
+.navigation-content {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 400px;
+    height: 360px;
+}
+
+.arrow-container {
+    height: 100px;
+    justify-content: center;
+    align-items: center;
+}
+
+.arrow-icon {
+    font-size: 72px;
+    color: #00E676;
+    text-align: center;
+}
+
+.distance-container {
+    flex-direction: row;
+    justify-content: center;
+    align-items: flex-end;
+    margin-top: 10px;
+}
+
+.distance-value {
+    font-size: 56px;
+    color: #FFFFFF;
+    font-weight: bold;
+}
+
+.distance-unit {
+    font-size: 24px;
+    color: #00E676;
+    margin-left: 6px;
+    margin-bottom: 8px;
+}
+
+.street-container {
+    margin-top: 12px;
+    width: 360px;
+    justify-content: center;
+    align-items: center;
+}
+
+.street-name {
+    font-size: 26px;
+    color: #E0E0E0;
+    text-align: center;
+    max-lines: 2;
+    text-overflow: ellipsis;
+}
+
+.idle-content {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 380px;
+    height: 320px;
+}
+
+.idle-title {
+    font-size: 32px;
+    color: #1976D2;
+    font-weight: bold;
+    text-align: center;
+}
+
+.idle-subtitle {
+    font-size: 22px;
+    color: #888888;
+    margin-top: 16px;
+    text-align: center;
+}
