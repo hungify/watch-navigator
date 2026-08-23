@@ -147,6 +147,58 @@ class NavigationEngineTest {
     }
 
     @Test
+    fun processLocation_slightDeviationUnder50m_isNotOffRoute() {
+        val engine = NavigationEngine(sampleRoute)
+
+        // Point 15 meters east of p1 (minor GPS jitter, well below 50m threshold)
+        // Latitude 21.0010, longitude offset approx 15m is ~0.00015
+        val slightlyJitteredPoint = LatLng(21.0010, 105.00015)
+        val progress = engine.processLocation(slightlyJitteredPoint)
+
+        assertThat(progress.isOffRoute).isFalse()
+        assertThat(progress.offRouteDistanceMeters).isLessThan(50.0)
+    }
+
+    @Test
+    fun calculateDistanceToRoute_onRoute_returnsMinimalDistance() {
+        val engine = NavigationEngine(sampleRoute)
+        val dist = engine.calculateDistanceToRoute(p1)
+        assertThat(dist).isLessThan(1.0)
+    }
+
+    @Test
+    fun calculateDistanceToRoute_nearUpcomingStep_returnsSmallDistance() {
+        val engine = NavigationEngine(sampleRoute)
+        // Point right on step 1 (p3) while engine is still at step 0
+        val dist = engine.calculateDistanceToRoute(p3)
+        assertThat(dist).isLessThan(2.0)
+    }
+
+    @Test
+    fun calculateDistanceToRoute_reachesThirdUpcomingStep_withoutOverviewPolyline() {
+        val s0 = NavStep("Step 0", "S0", ManeuverType.STRAIGHT, 100, 30, LatLng(21.000, 105.000), LatLng(21.001, 105.000), listOf(LatLng(21.000, 105.000), LatLng(21.001, 105.000)))
+        val s1 = NavStep("Step 1", "S1", ManeuverType.TURN_RIGHT, 100, 30, LatLng(21.001, 105.000), LatLng(21.001, 105.001), listOf(LatLng(21.001, 105.000), LatLng(21.001, 105.001)))
+        val s2 = NavStep("Step 2", "S2", ManeuverType.TURN_LEFT, 100, 30, LatLng(21.001, 105.001), LatLng(21.002, 105.001), listOf(LatLng(21.001, 105.001), LatLng(21.002, 105.001)))
+        val s3 = NavStep("Step 3", "S3", ManeuverType.ARRIVE, 100, 30, LatLng(21.002, 105.001), LatLng(21.002, 105.002), listOf(LatLng(21.002, 105.001), LatLng(21.002, 105.002)))
+
+        val multiStepRoute = NavRoute(
+            origin = LatLng(21.000, 105.000),
+            destination = LatLng(21.002, 105.002),
+            destinationAddress = "Multi Step Dest",
+            totalDistanceMeters = 400,
+            totalDurationSeconds = 120,
+            travelMode = TravelMode.DRIVING,
+            overviewPolyline = emptyList(),
+            steps = listOf(s0, s1, s2, s3)
+        )
+
+        val engine = NavigationEngine(multiStepRoute)
+        // Engine is at step 0 (index 0); user location is midway on step 3 (index 3, 3 steps ahead)
+        val distToStep3 = engine.calculateDistanceToRoute(LatLng(21.002, 105.0015))
+        assertThat(distToStep3).isLessThan(5.0)
+    }
+
+    @Test
     fun reset_resetsIndexAndArrival() {
         val engine = NavigationEngine(sampleRoute)
         engine.processLocation(p4) // Arrived

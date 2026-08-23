@@ -11,6 +11,7 @@
     <string name="status_ready">Ready to navigate</string>
     <string name="status_navigating">Navigating...</string>
     <string name="status_route_ready">Route calculated</string>
+    <string name="status_recalculating">Off route — recalculating route...</string>
 
     <string name="title_route_overview">Route Overview</string>
     <string name="title_turn_steps">Turn-by-Turn Steps</string>
@@ -35,4 +36,5 @@
     <string name="notification_starting">Starting navigation...</string>
     <string name="notification_arrived">Arrived at destination</string>
     <string name="notification_turn_instruction">In %1$s: %2$s</string>
+    <string name="notification_recalculating">Off route — recalculating route...</string>
 </resources>

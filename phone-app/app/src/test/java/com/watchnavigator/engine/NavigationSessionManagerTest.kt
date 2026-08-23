@@ -1,6 +1,8 @@
 package com.watchnavigator.engine
 
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.watchnavigator.data.DirectionsService
 import com.watchnavigator.data.WearEngineService
 import com.watchnavigator.model.LatLng
 import com.watchnavigator.model.ManeuverType
@@ -9,7 +11,6 @@ import com.watchnavigator.model.NavStep
 import com.watchnavigator.model.TravelMode
 import com.watchnavigator.model.WatchConnectionState
 import com.watchnavigator.model.WatchNavMessage
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +25,7 @@ class NavigationSessionManagerTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var fakeWearEngineService: FakeWearEngineService
+    private lateinit var fakeDirectionsService: FakeDirectionsService
     private lateinit var sessionManager: NavigationSessionManager
     private lateinit var sampleRoute: NavRoute
 
@@ -35,8 +37,8 @@ class NavigationSessionManagerTest {
     @Before
     fun setUp() {
         fakeWearEngineService = FakeWearEngineService()
-        sessionManager = NavigationSessionManager(fakeWearEngineService, testDispatcher)
-
+        fakeDirectionsService = FakeDirectionsService()
+        sessionManager = NavigationSessionManager(fakeWearEngineService, fakeDirectionsService, testDispatcher)
         val step0 = NavStep(
             instruction = "Head north on Street A",
             streetName = "Street A",
@@ -163,6 +165,220 @@ class NavigationSessionManagerTest {
         assertThat(sessionManager.watchSendError.value).isEqualTo("Bluetooth lost")
     }
 
+    @Test
+    fun offRoute_firstFixUnderThreshold_doesNotTriggerRecalculation() = runTest(testDispatcher) {
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        // Off-route by ~70m (east of p1)
+        val offRouteLoc = LatLng(21.0010, 105.0007)
+        sessionManager.onLocationUpdate(offRouteLoc)
+        advanceUntilIdle()
+
+        // Only 1 fix, threshold is 2 -> not yet triggered
+        assertThat(fakeDirectionsService.requestedCount).isEqualTo(0)
+        assertThat(sessionManager.isRecalculating.value).isFalse()
+    }
+
+    @Test
+    fun offRoute_meetsConsecutiveThreshold_triggersRecalculationAndUpdatesRoute() = runTest(testDispatcher) {
+        val reroutedStep = NavStep(
+            instruction = "Turn left onto New Route",
+            streetName = "New Route St",
+            maneuver = ManeuverType.TURN_LEFT,
+            distanceMeters = 300,
+            durationSeconds = 80,
+            startLocation = LatLng(21.0010, 105.0007),
+            endLocation = p3,
+            polylinePoints = listOf(LatLng(21.0010, 105.0007), p3)
+        )
+        val recalculatedRoute = NavRoute(
+            origin = LatLng(21.0010, 105.0007),
+            destination = p3,
+            destinationAddress = "Target Hanoi",
+            totalDistanceMeters = 300,
+            totalDurationSeconds = 80,
+            travelMode = TravelMode.DRIVING,
+            overviewPolyline = listOf(LatLng(21.0010, 105.0007), p3),
+            steps = listOf(reroutedStep)
+        )
+        fakeDirectionsService.routeToReturn = recalculatedRoute
+
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        val offRouteLoc1 = LatLng(21.0010, 105.0007)
+        val offRouteLoc2 = LatLng(21.0011, 105.0008)
+
+        sessionManager.onLocationUpdate(offRouteLoc1)
+        advanceUntilIdle()
+        assertThat(fakeDirectionsService.requestedCount).isEqualTo(0)
+
+        // 2nd consecutive off-route fix -> triggers recalculation
+        sessionManager.onLocationUpdate(offRouteLoc2)
+        advanceUntilIdle()
+
+        assertThat(fakeDirectionsService.requestedCount).isEqualTo(1)
+        assertThat(sessionManager.activeRoute.value).isEqualTo(recalculatedRoute)
+        assertThat(sessionManager.navigationProgress.value?.currentStep?.streetName).isEqualTo("New Route St")
+
+        // Check that new maneuver was sent immediately to watch
+        val lastSent = fakeWearEngineService.sentMessages.last()
+        assertThat(lastSent.turn).isEqualTo("left")
+        assertThat(lastSent.street).isEqualTo("New Route St")
+    }
+
+    @Test
+    fun offRoute_largeDeviationOver100m_triggersImmediateRecalculation() = runTest(testDispatcher) {
+        fakeDirectionsService.routeToReturn = sampleRoute
+
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        // Point >150m away from route
+        val farOffRouteLoc = LatLng(21.0010, 105.0025)
+        sessionManager.onLocationUpdate(farOffRouteLoc)
+        advanceUntilIdle()
+
+        assertThat(fakeDirectionsService.requestedCount).isEqualTo(1)
+    }
+
+    @Test
+    fun recalculation_throttlesRepeatedCallsWithinCooldown() = runTest(testDispatcher) {
+        var fakeCurrentTime = 1000L
+        sessionManager.timeProvider = { fakeCurrentTime }
+        sessionManager.recalculationCooldownMs = 10_000L
+
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        val farOffRouteLoc = LatLng(21.0010, 105.0025)
+        sessionManager.onLocationUpdate(farOffRouteLoc)
+        advanceUntilIdle()
+        assertThat(fakeDirectionsService.requestedCount).isEqualTo(1)
+
+        // 3 seconds later (within 10s cooldown): another off-route fix should NOT trigger API
+        fakeCurrentTime += 3000L
+        sessionManager.onLocationUpdate(farOffRouteLoc)
+        advanceUntilIdle()
+        assertThat(fakeDirectionsService.requestedCount).isEqualTo(1)
+
+        // 11 seconds later (past cooldown): off-route fix triggers again
+        fakeCurrentTime += 8000L
+        sessionManager.onLocationUpdate(farOffRouteLoc)
+        advanceUntilIdle()
+        assertThat(fakeDirectionsService.requestedCount).isEqualTo(2)
+    }
+
+    @Test
+    fun recalculationFailure_retainsSessionStateAndSetsError() = runTest(testDispatcher) {
+        fakeDirectionsService.resultToReturn = Result.failure(Exception("Network timeout"))
+
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        val farOffRouteLoc = LatLng(21.0010, 105.0025)
+        sessionManager.onLocationUpdate(farOffRouteLoc)
+        advanceUntilIdle()
+
+        assertThat(sessionManager.isNavigating.value).isTrue()
+        assertThat(sessionManager.recalculationError.value).isEqualTo("Network timeout")
+        assertThat(sessionManager.activeRoute.value).isEqualTo(sampleRoute)
+    }
+
+    @Test
+    fun recalculationThrowsException_resetsIsRecalculatingAndPublishesError() = runTest(testDispatcher) {
+        val throwingDirectionsService = object : DirectionsService {
+            override suspend fun getDirections(origin: LatLng, destination: LatLng, mode: TravelMode): Result<NavRoute> {
+                throw RuntimeException("Unexpected service crash")
+            }
+
+            override suspend fun getDirectionsByPlaceId(origin: LatLng, destinationPlaceId: String, mode: TravelMode): Result<NavRoute> =
+                getDirections(origin, LatLng(0.0, 0.0), mode)
+        }
+
+        sessionManager.setDirectionsService(throwingDirectionsService)
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        val farOffRouteLoc = LatLng(21.0010, 105.0025)
+        sessionManager.onLocationUpdate(farOffRouteLoc)
+        advanceUntilIdle()
+
+        assertThat(sessionManager.isRecalculating.value).isFalse()
+        assertThat(sessionManager.recalculationError.value).isEqualTo("Unexpected service crash")
+        assertThat(sessionManager.isNavigating.value).isTrue()
+    }
+
+    @Test
+    fun recalculationFromOldSession_delayedResponse_doesNotOverwriteNewSessionRoute() = runTest(testDispatcher) {
+        val delayDeferred = kotlinx.coroutines.CompletableDeferred<NavRoute>()
+        val delayedDirectionsService = object : DirectionsService {
+            override suspend fun getDirections(origin: LatLng, destination: LatLng, mode: TravelMode): Result<NavRoute> {
+                return try {
+                    val route = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                        delayDeferred.await()
+                    }
+                    Result.success(route)
+                } catch (e: Exception) {
+                    Result.failure(e)
+                }
+            }
+
+            override suspend fun getDirectionsByPlaceId(origin: LatLng, destinationPlaceId: String, mode: TravelMode): Result<NavRoute> =
+                getDirections(origin, LatLng(0.0, 0.0), mode)
+        }
+
+        sessionManager.setDirectionsService(delayedDirectionsService)
+
+        // Start session 1
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        // Trigger recalculation in session 1 (large deviation)
+        val farOffRouteLoc = LatLng(21.0010, 105.0025)
+        sessionManager.onLocationUpdate(farOffRouteLoc)
+        // Allow coroutine to start and enter getDirections awaiting delayDeferred
+        testScheduler.runCurrent()
+        assertThat(sessionManager.isRecalculating.value).isTrue()
+        // Start session 2 with a new distinct route
+        val stepNew = NavStep("Session 2 Step", "Session 2 Street", ManeuverType.STRAIGHT, 500, 100, LatLng(21.050, 105.800), LatLng(21.055, 105.800), emptyList())
+        val session2Route = NavRoute(
+            origin = LatLng(21.050, 105.800),
+            destination = LatLng(21.055, 105.800),
+            destinationAddress = "Session 2 Destination",
+            totalDistanceMeters = 500,
+            totalDurationSeconds = 100,
+            travelMode = TravelMode.DRIVING,
+            overviewPolyline = emptyList(),
+            steps = listOf(stepNew)
+        )
+        sessionManager.startSession(session2Route, TravelMode.DRIVING, "Session 2 Destination")
+        advanceUntilIdle()
+
+        assertThat(sessionManager.activeRoute.value).isEqualTo(session2Route)
+
+        // Now session 1's recalculation completes
+        val staleRecalculatedRoute = NavRoute(
+            origin = farOffRouteLoc,
+            destination = sampleRoute.destination,
+            destinationAddress = "Stale Route",
+            totalDistanceMeters = 999,
+            totalDurationSeconds = 999,
+            travelMode = TravelMode.DRIVING,
+            overviewPolyline = emptyList(),
+            steps = listOf(NavStep("Stale Step", "Stale St", ManeuverType.TURN_LEFT, 999, 999, farOffRouteLoc, sampleRoute.destination!!, emptyList()))
+        )
+        delayDeferred.complete(staleRecalculatedRoute)
+        advanceUntilIdle()
+
+        // Verify session 2's route and progress are preserved and NOT overwritten by stale result
+        assertThat(sessionManager.activeRoute.value).isEqualTo(session2Route)
+        assertThat(sessionManager.navigationProgress.value?.currentStep?.streetName).isEqualTo("Session 2 Street")
+        val lastWatchMsg = fakeWearEngineService.sentMessages.last()
+        assertThat(lastWatchMsg.street).isEqualTo("Session 2 Street")
+    }
+
     private class FakeWearEngineService : WearEngineService {
         private val _connectionState = MutableStateFlow<WatchConnectionState>(WatchConnectionState.Connected("GT 5", "GT5"))
         override val connectionState: StateFlow<WatchConnectionState> = _connectionState.asStateFlow()
@@ -180,5 +396,29 @@ class NavigationSessionManagerTest {
 
         override suspend fun pingWatch(): Result<Boolean> = Result.success(true)
         override fun release() {}
+    }
+
+    private class FakeDirectionsService : DirectionsService {
+        var requestedCount = 0
+        var routeToReturn: NavRoute? = null
+        var resultToReturn: Result<NavRoute>? = null
+
+        override suspend fun getDirections(
+            origin: LatLng,
+            destination: LatLng,
+            mode: TravelMode
+        ): Result<NavRoute> {
+            requestedCount++
+            val custom = resultToReturn
+            if (custom != null) return custom
+            val route = routeToReturn ?: return Result.failure(IllegalStateException("No route set"))
+            return Result.success(route)
+        }
+
+        override suspend fun getDirectionsByPlaceId(
+            origin: LatLng,
+            destinationPlaceId: String,
+            mode: TravelMode
+        ): Result<NavRoute> = getDirections(origin, LatLng(0.0, 0.0), mode)
     }
 }

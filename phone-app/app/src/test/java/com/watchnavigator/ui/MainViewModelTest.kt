@@ -44,7 +44,7 @@ class MainViewModelTest {
         fakePlacesService = FakePlacesSearchService()
         fakeDirectionsService = FakeDirectionsService()
         fakeWearEngineService = FakeWearEngineService()
-        sessionManager = NavigationSessionManager(fakeWearEngineService, testDispatcher)
+        sessionManager = NavigationSessionManager(fakeWearEngineService, fakeDirectionsService, testDispatcher)
         viewModel = MainViewModel(fakePlacesService, fakeDirectionsService, fakeWearEngineService, sessionManager)
     }
 
@@ -361,6 +361,63 @@ class MainViewModelTest {
         }
 
         override fun createNewSessionToken() {}
+    }
+
+    @Test
+    fun sessionRecalculation_updatesViewModelRouteStateAndManeuver() = runTest {
+        val startLoc = LatLng(21.0285, 105.8542)
+        val destLoc = LatLng(21.0175, 105.7842)
+        val initialRoute = createSampleRoute(destLoc)
+        fakeDirectionsService.routeToReturn = initialRoute
+
+        viewModel.setCurrentLocation(startLoc)
+        val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
+        fakePlacesService.placeLocationToReturn = destLoc
+        viewModel.selectSuggestion(suggestion)
+        advanceUntilIdle()
+
+        viewModel.startNavigation()
+        advanceUntilIdle()
+        assertThat(viewModel.isNavigating.value).isTrue()
+
+        // Prepare a new recalculated route
+        val reroutedStep = NavStep(
+            instruction = "Turn right onto Recalculated Way",
+            streetName = "Recalculated Way",
+            maneuver = ManeuverType.TURN_RIGHT,
+            distanceMeters = 800,
+            durationSeconds = 120,
+            startLocation = LatLng(21.0300, 105.8600),
+            endLocation = destLoc,
+            polylinePoints = listOf(LatLng(21.0300, 105.8600), destLoc)
+        )
+        val recalculatedRoute = NavRoute(
+            origin = LatLng(21.0300, 105.8600),
+            destination = destLoc,
+            destinationAddress = "Landmark 72, Hanoi",
+            totalDistanceMeters = 800,
+            totalDurationSeconds = 120,
+            travelMode = TravelMode.DRIVING,
+            overviewPolyline = listOf(LatLng(21.0300, 105.8600), destLoc),
+            steps = listOf(reroutedStep)
+        )
+        fakeDirectionsService.routeToReturn = recalculatedRoute
+
+        // User deviates > 100m -> triggers auto-recalculation
+        val offRouteLoc = LatLng(21.0300, 105.8600)
+        viewModel.setCurrentLocation(offRouteLoc)
+        advanceUntilIdle()
+
+        val updatedRouteState = viewModel.routeState.value
+        assertThat(updatedRouteState).isInstanceOf(RouteUiState.Success::class.java)
+        val routeSuccess = updatedRouteState as RouteUiState.Success
+        assertThat(routeSuccess.route.totalDistanceMeters).isEqualTo(800)
+        assertThat(viewModel.navigationProgress.value?.currentStep?.streetName).isEqualTo("Recalculated Way")
+    }
+
+    @Test
+    fun isRecalculating_flowExposedFromSessionManager() = runTest {
+        assertThat(viewModel.isRecalculating.value).isFalse()
     }
 
     private class FakeDirectionsService : DirectionsService {
