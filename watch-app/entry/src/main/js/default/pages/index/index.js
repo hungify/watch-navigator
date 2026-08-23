@@ -8,7 +8,7 @@ const page = {
         isNavigating: false,
         statusText: 'Disconnected',
         street: 'Ready',
-        turnIcon: '↑'
+        turnIcon: '/common/turn_straight.png'
     },
     destroyWearEngineReceiver() {
         console.info('Wear Engine receiver destroyed');

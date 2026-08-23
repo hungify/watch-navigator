@@ -28,7 +28,7 @@ test('Watch index page initializes with idle state', () => {
   assert.equal(p.isNavigating, false);
   assert.equal(p.isArrived, false);
   assert.equal(p.statusText, 'Disconnected');
-  assert.equal(p.turnIcon, '↑');
+  assert.equal(p.turnIcon, '/common/turn_straight.png');
   assert.equal(p.distance, '0');
   assert.equal(p.distanceUnit, 'm');
   assert.equal(p.street, 'Ready');
@@ -47,7 +47,7 @@ test('Watch index page delegates updateNavigation and syncs properties', () => {
   assert.equal(p.isNavigating, true);
   assert.equal(p.isArrived, false);
   assert.equal(p.statusText, 'Navigating');
-  assert.equal(p.turnIcon, '←');
+  assert.equal(p.turnIcon, '/common/turn_left.png');
   assert.equal(p.distance, '120');
   assert.equal(p.distanceUnit, 'm');
   assert.equal(p.street, 'Tran Phu');
@@ -66,7 +66,7 @@ test('Watch index page synchronizes arrival state on arrive maneuver', () => {
   assert.equal(p.isNavigating, true);
   assert.equal(p.isArrived, true);
   assert.equal(p.statusText, 'Arrived');
-  assert.equal(p.turnIcon, '★');
+  assert.equal(p.turnIcon, '/common/turn_arrive.png');
   assert.equal(p.street, 'Keangnam Tower');
 });
 
@@ -85,7 +85,7 @@ test('Watch index page ignores invalid navigation payloads', () => {
   p.updateNavigation({ turn: '' });
 
   assert.equal(p.isNavigating, true);
-  assert.equal(p.turnIcon, '→');
+  assert.equal(p.turnIcon, '/common/turn_right.png');
   assert.equal(p.distance, '300');
   assert.equal(p.street, 'Pham Hung');
 });

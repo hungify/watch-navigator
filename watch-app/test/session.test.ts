@@ -25,7 +25,7 @@ test('NavigationSession initializes with default disconnected state', () => {
     isNavigating: false,
     statusText: 'Disconnected',
     street: 'Ready',
-    turnIcon: '↑'
+    turnIcon: '/common/turn_straight.png'
   });
 });
 
@@ -59,7 +59,7 @@ test('NavigationSession ingests valid navigation payload and triggers turn hapti
     isNavigating: true,
     statusText: 'Navigating',
     street: 'Nguyen Trai',
-    turnIcon: '←'
+    turnIcon: '/common/turn_left.png'
   });
   assert.equal(driver.calls.length, 1);
   assert.equal(driver.calls[0].mode, 'short');
@@ -123,7 +123,7 @@ test('NavigationSession transitions to Arrived state and triggers long arrival v
     isNavigating: true,
     statusText: 'Arrived',
     street: 'Vincom Center',
-    turnIcon: '★'
+    turnIcon: '/common/turn_arrive.png'
   });
 
   assert.equal(driver.calls.length, 2);
@@ -172,7 +172,7 @@ test('NavigationSession reset restores initial state cleanly', () => {
     isNavigating: false,
     statusText: 'Disconnected',
     street: 'Ready',
-    turnIcon: '↑'
+    turnIcon: '/common/turn_straight.png'
   });
 });
 
@@ -181,11 +181,11 @@ test('NavigationSession handles arrival case-insensitively', () => {
 
   session.ingest({ distance_m: 0, street: 'Home', turn: 'ARRIVE' });
   assert.equal(session.getState().statusText, 'Arrived');
-  assert.equal(session.getState().turnIcon, '★');
+  assert.equal(session.getState().turnIcon, '/common/turn_arrive.png');
 
   session.ingest({ distance_m: 0, street: 'Office', turn: 'Arrive' });
   assert.equal(session.getState().statusText, 'Arrived');
-  assert.equal(session.getState().turnIcon, '★');
+  assert.equal(session.getState().turnIcon, '/common/turn_arrive.png');
 });
 
 test('NavigationSession triggers arrival vibration only once across consecutive arrival updates', () => {
@@ -228,7 +228,7 @@ test('NavigationSession triggers second turn vibration for distinct maneuvers sh
   assert.equal(driver.calls.length, 1);
   assert.equal(driver.calls[0].mode, 'short');
 
-  // Same icon (⟳) and same street, but distinct maneuver 'roundabout-right' MUST trigger second vibration
+  // Same icon (/common/turn_roundabout.png) and same street, but distinct maneuver 'roundabout-right' MUST trigger second vibration
   session.ingest({ distance_m: 80, street: 'Roundabout Square', turn: 'roundabout-right' });
   assert.equal(driver.calls.length, 2);
   assert.equal(driver.calls[1].mode, 'short');
@@ -243,7 +243,7 @@ test('NavigationSession triggers second turn vibration for distinct maneuvers sh
   assert.equal(driver.calls.length, 1);
   assert.equal(driver.calls[0].mode, 'short');
 
-  // Same icon (⟳) and same street, but distinct maneuver 'roundabout-right' MUST trigger second vibration
+  // Same icon (/common/turn_roundabout.png) and same street, but distinct maneuver 'roundabout-right' MUST trigger second vibration
   session.ingest({ turn: 'roundabout-right', distance_m: 80, street: 'Roundabout Square' });
   assert.equal(driver.calls.length, 2);
   assert.equal(driver.calls[1].mode, 'short');

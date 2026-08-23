@@ -148,36 +148,37 @@ export function getTurnIcon(turn: string): string {
   const canonical = getCanonicalTurn(turn);
   switch (canonical) {
     case 'left':
-      return '←';
+      return '/common/turn_left.png';
     case 'right':
-      return '→';
+      return '/common/turn_right.png';
     case 'slight-left':
     case 'ramp-left':
     case 'fork-left':
-      return '↖';
+      return '/common/turn_slight_left.png';
     case 'slight-right':
     case 'ramp-right':
     case 'fork-right':
-      return '↗';
+      return '/common/turn_slight_right.png';
     case 'sharp-left':
-      return '↰';
+      return '/common/turn_sharp_left.png';
     case 'sharp-right':
-      return '↱';
+      return '/common/turn_sharp_right.png';
     case 'uturn-left':
     case 'uturn-right':
-      return '⮌';
+      return '/common/turn_uturn.png';
     case 'roundabout':
     case 'roundabout-left':
     case 'roundabout-right':
-      return '⟳';
+      return '/common/turn_roundabout.png';
     case 'arrive':
-      return '★';
+      return '/common/turn_arrive.png';
     case 'depart':
+      return '/common/turn_depart.png';
     case 'straight':
     case 'continue':
     case 'merge':
     default:
-      return '↑';
+      return '/common/turn_straight.png';
   }
 }
 

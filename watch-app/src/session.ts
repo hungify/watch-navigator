@@ -15,7 +15,7 @@ const INITIAL_STATE: Readonly<WatchPageState> = Object.freeze({
   isNavigating: false,
   statusText: 'Disconnected',
   street: 'Ready',
-  turnIcon: '↑'
+  turnIcon: '/common/turn_straight.png'
 });
 
 export class NavigationSession {
