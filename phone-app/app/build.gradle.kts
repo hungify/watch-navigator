@@ -25,6 +25,13 @@ val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY")
     ?: System.getenv("MAPS_API_KEY")
     ?: ""
 
+val navServerUrl: String = localProperties.getProperty("NAV_SERVER_URL")
+    ?: System.getenv("NAV_SERVER_URL")
+    ?: ""
+
+val navServerToken: String = localProperties.getProperty("NAV_SERVER_TOKEN")
+    ?: System.getenv("NAV_SERVER_TOKEN")
+    ?: ""
 android {
     namespace = "com.watchnavigator"
     compileSdk = 35
@@ -39,6 +46,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
+        buildConfigField("String", "NAV_SERVER_URL", "\"$navServerUrl\"")
+        buildConfigField("String", "NAV_SERVER_TOKEN", "\"$navServerToken\"")
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
