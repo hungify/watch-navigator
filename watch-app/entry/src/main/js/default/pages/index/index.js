@@ -1,5 +1,7 @@
 import { NavigationSession } from "../../session.js";
+import { WearEngineReceiver } from "../../wearengine.js";
 let session = null;
+let receiver = null;
 const page = {
     data: {
         distance: '0',
@@ -11,9 +13,20 @@ const page = {
         turnIcon: '/common/turn_straight.png'
     },
     destroyWearEngineReceiver() {
+        if (receiver) {
+            receiver.stop();
+            receiver = null;
+        }
         console.info('Wear Engine receiver destroyed');
     },
-    initWearEngineReceiver() {
+    initWearEngineReceiver(driver) {
+        if (receiver) {
+            receiver.stop();
+        }
+        receiver = new WearEngineReceiver(driver, payload => {
+            this.updateNavigation(payload);
+        });
+        receiver.start();
         console.info('Wear Engine receiver initialized');
     },
     onDestroy() {
