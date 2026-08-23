@@ -10,4 +10,15 @@
     <string name="btn_stop_navigation">Stop Navigation</string>
     <string name="status_ready">Ready to navigate</string>
     <string name="status_navigating">Navigating...</string>
+    <string name="status_route_ready">Route calculated</string>
+
+    <string name="title_route_overview">Route Overview</string>
+    <string name="title_turn_steps">Turn-by-Turn Steps</string>
+    <string name="label_duration">Est. Time</string>
+    <string name="label_total_distance">Distance</string>
+    <string name="calculating_route">Calculating route...</string>
+    <string name="searching_places">Searching places...</string>
+    <string name="no_suggestions">No matching places found</string>
+    <string name="retry">Retry</string>
+    <string name="clear">Clear</string>
 </resources>
