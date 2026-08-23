@@ -23,6 +23,7 @@ import com.watchnavigator.data.GoogleDirectionsService
 import com.watchnavigator.data.GooglePlacesSearchService
 import com.watchnavigator.data.HuaweiWearEngineService
 import com.watchnavigator.databinding.ActivityMainBinding
+import com.watchnavigator.engine.NavigationProgress
 import com.watchnavigator.model.LatLng
 import com.watchnavigator.model.TravelMode
 import com.watchnavigator.model.WatchConnectionState
@@ -245,21 +246,28 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+                launch {
+                    viewModel.isRecalculating.collect { isRecalculating ->
+                        if (viewModel.isNavigating.value) {
+                            if (isRecalculating) {
+                                binding.tvStatus.text = getString(R.string.status_recalculating)
+                            } else {
+                                renderNavigationStatus(viewModel.navigationProgress.value)
+                            }
+                        }
+                    }
+                }
 
                 launch {
                     var lastScrolledStepIndex = -1
                     viewModel.navigationProgress.collect { progress ->
                         if (progress != null && viewModel.isNavigating.value) {
+                            if (!viewModel.isRecalculating.value) {
+                                renderNavigationStatus(progress)
+                            }
                             if (progress.isArrived) {
-                                binding.tvStatus.text = getString(R.string.notification_arrived)
                                 stepsAdapter.setActiveStep(progress.currentStepIndex, 0)
                             } else {
-                                val distStr = DistanceFormatter.formatDistance(progress.remainingDistanceToNextTurnMeters)
-                                binding.tvStatus.text = getString(
-                                    R.string.notification_turn_instruction,
-                                    distStr,
-                                    progress.currentStep.instruction
-                                )
                                 stepsAdapter.setActiveStep(
                                     progress.currentStepIndex,
                                     progress.remainingDistanceToNextTurnMeters
@@ -393,6 +401,21 @@ class MainActivity : AppCompatActivity() {
             val isRouteLoaded = viewModel.routeState.value is RouteUiState.Success
             binding.tvStatus.text = if (isRouteLoaded) getString(R.string.status_route_ready) else getString(R.string.status_ready)
             binding.btnNavigate.text = getString(R.string.btn_start_navigation)
+        }
+    }
+
+    private fun renderNavigationStatus(progress: NavigationProgress?) {
+        if (progress == null) {
+            binding.tvStatus.text = getString(R.string.status_navigating)
+        } else if (progress.isArrived) {
+            binding.tvStatus.text = getString(R.string.notification_arrived)
+        } else {
+            val distStr = DistanceFormatter.formatDistance(progress.remainingDistanceToNextTurnMeters)
+            binding.tvStatus.text = getString(
+                R.string.notification_turn_instruction,
+                distStr,
+                progress.currentStep.instruction
+            )
         }
     }
 

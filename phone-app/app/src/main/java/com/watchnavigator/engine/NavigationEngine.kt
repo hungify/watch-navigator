@@ -96,8 +96,8 @@ class NavigationEngine(
         }
 
         // 5. Check off-route status
-        val distanceToStepPolyline = GeoUtils.distanceToStepPolyline(location, currentStep)
-        val isOffRoute = distanceToStepPolyline > offRouteThresholdMeters
+        val distanceToRoute = calculateDistanceToRoute(location)
+        val isOffRoute = distanceToRoute > offRouteThresholdMeters
 
         return NavigationProgress(
             currentStepIndex = _currentStepIndex,
@@ -106,7 +106,7 @@ class NavigationEngine(
             totalRemainingDistanceMeters = totalRemaining,
             isArrived = false,
             isOffRoute = isOffRoute,
-            offRouteDistanceMeters = distanceToStepPolyline
+            offRouteDistanceMeters = distanceToRoute
         )
     }
 
@@ -142,6 +142,34 @@ class NavigationEngine(
 
             break
         }
+    }
+
+    /**
+     * Calculates the shortest distance in meters from the user's location to the active route polyline/steps.
+     */
+    fun calculateDistanceToRoute(location: LatLng): Double {
+        if (route.steps.isEmpty()) return 0.0
+
+        var minDist = GeoUtils.distanceToStepPolyline(location, route.steps[_currentStepIndex])
+
+        // Check upcoming steps within reach (up to 3 steps ahead: +1, +2, +3)
+        val checkLimit = minOf(_currentStepIndex + 4, route.steps.size)
+        for (i in (_currentStepIndex + 1) until checkLimit) {
+            val stepDist = GeoUtils.distanceToStepPolyline(location, route.steps[i])
+            if (stepDist < minDist) {
+                minDist = stepDist
+            }
+        }
+
+        // Cross-check against overviewPolyline if available
+        if (route.overviewPolyline.size >= 2) {
+            val polyDist = GeoUtils.findClosestPointOnPolyline(location, route.overviewPolyline).distanceToPolylineMeters
+            if (polyDist < minDist) {
+                minDist = polyDist
+            }
+        }
+
+        return minDist
     }
 
     fun reset() {

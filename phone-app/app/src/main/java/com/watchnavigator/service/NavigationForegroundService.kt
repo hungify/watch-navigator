@@ -155,6 +155,24 @@ class NavigationForegroundService : Service() {
         }
 
         serviceScope.launch {
+            sessionManager.isRecalculating.collect { isRecalculating ->
+                if (isTracking) {
+                    val updatedNotification = buildNotification(sessionManager.navigationProgress.value)
+                    notificationManager.notify(NOTIFICATION_ID, updatedNotification)
+                }
+            }
+        }
+
+        serviceScope.launch {
+            sessionManager.activeRoute.collect {
+                if (isTracking) {
+                    val updatedNotification = buildNotification(sessionManager.navigationProgress.value)
+                    notificationManager.notify(NOTIFICATION_ID, updatedNotification)
+                }
+            }
+        }
+
+        serviceScope.launch {
             sessionManager.isNavigating.collect { isNavigating ->
                 if (!isNavigating && isTracking) {
                     stopNavigationService()
@@ -168,6 +186,7 @@ class NavigationForegroundService : Service() {
 
         val title = getString(R.string.notification_navigating_to, destAddress)
         val contentText = when {
+            sessionManager.isRecalculating.value -> getString(R.string.notification_recalculating)
             progress == null -> getString(R.string.notification_starting)
             progress.isArrived -> getString(R.string.notification_arrived)
             else -> {

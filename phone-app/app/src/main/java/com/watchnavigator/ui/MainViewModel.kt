@@ -44,7 +44,7 @@ class MainViewModel(
     private val placesSearchService: PlacesSearchService,
     private val directionsService: DirectionsService,
     private val wearEngineService: WearEngineService? = null,
-    val sessionManager: NavigationSessionManager = NavigationSessionManager.getInstance(wearEngineService)
+    val sessionManager: NavigationSessionManager = NavigationSessionManager.getInstance(wearEngineService, directionsService)
 ) : ViewModel() {
 
     private val _queryFlow = MutableStateFlow("")
@@ -73,6 +73,9 @@ class MainViewModel(
     val lastSentWatchMessage: StateFlow<WatchNavMessage?> = sessionManager.lastSentWatchMessage
     val watchSendError: StateFlow<String?> = sessionManager.watchSendError
 
+    val isRecalculating: StateFlow<Boolean> = sessionManager.isRecalculating
+    val recalculationError: StateFlow<String?> = sessionManager.recalculationError
+
     private val _currentStepIndex = MutableStateFlow(0)
     val currentStepIndex: StateFlow<Int> = _currentStepIndex.asStateFlow()
 
@@ -86,7 +89,7 @@ class MainViewModel(
 
     init {
         sessionManager.setWearEngineService(wearEngineService)
-
+        sessionManager.setDirectionsService(directionsService)
         _queryFlow
             .debounce(300)
             .distinctUntilChanged()
@@ -106,6 +109,15 @@ class MainViewModel(
             sessionManager.navigationProgress.collect { progress ->
                 if (progress != null) {
                     _currentStepIndex.value = progress.currentStepIndex
+                }
+            }
+        }
+
+        // Keep route UI state synchronized when session recalculates active route
+        viewModelScope.launch {
+            sessionManager.activeRoute.collect { newRoute ->
+                if (newRoute != null && sessionManager.isNavigating.value) {
+                    _routeState.value = RouteUiState.Success(newRoute)
                 }
             }
         }
@@ -301,7 +313,7 @@ class MainViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
-                val sm = sessionManager ?: NavigationSessionManager.getInstance(wearEngineService)
+                val sm = sessionManager ?: NavigationSessionManager.getInstance(wearEngineService, directionsService)
                 return MainViewModel(placesSearchService, directionsService, wearEngineService, sm) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
