@@ -28,6 +28,7 @@ keystore.properties
 !.dev.vars.example
 
 
+.worktrees/
 # IDE and OS files
 .idea/
 *.iml

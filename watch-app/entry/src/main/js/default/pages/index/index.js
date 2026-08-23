@@ -1,11 +1,21 @@
-import { getTurnIcon, isValidNavigationPayload } from '../../types';
+import { NavigationSession } from "../../session.js";
+const session = new NavigationSession();
 const page = {
-    data: {
-        isNavigating: false,
-        statusText: 'Disconnected',
-        turnIcon: '↑',
-        distance: '0',
-        street: 'Ready'
+    data: session.getState(),
+    session,
+    onDestroy() {
+        console.info('Watch Navigator Page onDestroy');
+        this.session.reset();
+        this.destroyWearEngineReceiver();
+    },
+    destroyWearEngineReceiver() {
+        console.info('Wear Engine receiver destroyed');
+    },
+    initWearEngineReceiver() {
+        console.info('Wear Engine receiver initialized');
+    },
+    onHide() {
+        console.info('Watch Navigator Page onHide');
     },
     onInit() {
         console.info('Watch Navigator Page onInit');
@@ -14,29 +24,16 @@ const page = {
     onShow() {
         console.info('Watch Navigator Page onShow');
     },
-    onHide() {
-        console.info('Watch Navigator Page onHide');
-    },
-    onDestroy() {
-        console.info('Watch Navigator Page onDestroy');
-        this.destroyWearEngineReceiver();
-    },
-    initWearEngineReceiver() {
-        console.info('Wear Engine receiver initialized');
-    },
-    destroyWearEngineReceiver() {
-        console.info('Wear Engine receiver destroyed');
-    },
     updateNavigation(data) {
-        if (!isValidNavigationPayload(data)) {
+        if (!this.session.ingest(data)) {
             return;
         }
-        const payload = data;
-        this.isNavigating = true;
-        this.statusText = payload.turn.toLowerCase() === 'arrive' ? 'Arrived' : 'Navigating';
-        this.distance = String(payload.distance_m ?? payload.distanceMeters ?? 0);
-        this.street = typeof payload.street === 'string' ? payload.street : '';
-        this.turnIcon = getTurnIcon(payload.turn);
+        const state = this.session.getState();
+        this.distance = state.distance;
+        this.isNavigating = state.isNavigating;
+        this.statusText = state.statusText;
+        this.street = state.street;
+        this.turnIcon = state.turnIcon;
     }
 };
 export default page;
