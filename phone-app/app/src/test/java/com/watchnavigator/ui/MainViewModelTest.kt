@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import com.watchnavigator.data.DirectionsService
 import com.watchnavigator.data.PlacesSearchService
 import com.watchnavigator.data.WearEngineService
+import com.watchnavigator.engine.NavigationSessionManager
 import com.watchnavigator.model.LatLng
 import com.watchnavigator.model.ManeuverType
 import com.watchnavigator.model.NavRoute
@@ -34,6 +35,7 @@ class MainViewModelTest {
     private lateinit var fakePlacesService: FakePlacesSearchService
     private lateinit var fakeDirectionsService: FakeDirectionsService
     private lateinit var fakeWearEngineService: FakeWearEngineService
+    private lateinit var sessionManager: NavigationSessionManager
     private lateinit var viewModel: MainViewModel
 
     @Before
@@ -42,7 +44,8 @@ class MainViewModelTest {
         fakePlacesService = FakePlacesSearchService()
         fakeDirectionsService = FakeDirectionsService()
         fakeWearEngineService = FakeWearEngineService()
-        viewModel = MainViewModel(fakePlacesService, fakeDirectionsService, fakeWearEngineService)
+        sessionManager = NavigationSessionManager(fakeWearEngineService, testDispatcher)
+        viewModel = MainViewModel(fakePlacesService, fakeDirectionsService, fakeWearEngineService, sessionManager)
     }
 
     @After
