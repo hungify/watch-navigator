@@ -5,6 +5,7 @@ import com.watchnavigator.data.WearEngineService
 import com.watchnavigator.model.LatLng
 import com.watchnavigator.model.NavRoute
 import com.watchnavigator.model.TravelMode
+import com.watchnavigator.model.ManeuverType
 import com.watchnavigator.model.WatchNavMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -24,7 +25,7 @@ class NavigationSessionManager(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Main
 ) {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
-    private val messageChannel = Channel<WatchNavMessage>(Channel.UNLIMITED)
+    private val messageChannel = Channel<WatchNavMessage>(Channel.CONFLATED)
 
     private val _isNavigating = MutableStateFlow(false)
     val isNavigating: StateFlow<Boolean> = _isNavigating.asStateFlow()
@@ -103,6 +104,7 @@ class NavigationSessionManager(
         lastRecalculationTimeMs = 0L
         activeRecalculationJob?.cancel()
         activeRecalculationJob = null
+        wearEngineService?.stopAutoReconnect()
 
         val engine = NavigationEngine(route)
         navigationEngine = engine
@@ -138,6 +140,7 @@ class NavigationSessionManager(
             _isNavigating.value = false
             activeRecalculationJob?.cancel()
             _isRecalculating.value = false
+            wearEngineService?.stopAutoReconnect()
             return
         }
 
@@ -207,6 +210,7 @@ class NavigationSessionManager(
                         val arrivalMsg = WatchNavMessage.arrival(destinationName)
                         sendWatchMessage(arrivalMsg)
                         _isNavigating.value = false
+                        wearEngineService?.stopAutoReconnect()
                     } else {
                         val msg = WatchNavMessage.fromNavStep(
                             newProgress.currentStep,
@@ -240,6 +244,7 @@ class NavigationSessionManager(
             _isNavigating.value = false
             sendWatchMessage(WatchNavMessage.stop())
         }
+        wearEngineService?.stopAutoReconnect()
         _isRecalculating.value = false
         consecutiveOffRouteCount = 0
         activeRecalculationJob?.cancel()
@@ -264,10 +269,51 @@ class NavigationSessionManager(
         }
         val result = service.sendNavMessage(msg)
         result.onSuccess {
-            _lastSentWatchMessage.value = msg
-            _watchSendError.value = null
+            if (service.isReconnecting.value) {
+                service.stopAutoReconnect()
+            }
+            if (_isNavigating.value || msg.turn == WatchNavMessage.TERMINAL_TURN || msg.turn == ManeuverType.ARRIVE.watchValue) {
+                _lastSentWatchMessage.value = msg
+                _watchSendError.value = null
+            }
         }.onFailure { error ->
             _watchSendError.value = error.message ?: "Failed to send message to watch"
+            if (_isNavigating.value) {
+                service.startAutoReconnect {
+                    onWatchReconnected()
+                }
+            }
+        }
+    }
+
+    internal suspend fun onWatchReconnected() {
+        if (!_isNavigating.value) return
+        _watchSendError.value = null
+        val progress = _navigationProgress.value
+        val messageToSend = when {
+            progress == null -> _lastSentWatchMessage.value
+            progress.isArrived -> WatchNavMessage.arrival(destinationName)
+            else -> WatchNavMessage.fromNavStep(
+                progress.currentStep,
+                progress.remainingDistanceToNextTurnMeters
+            )
+        }
+        if (messageToSend != null) {
+            val service = wearEngineService ?: return
+            val result = service.sendNavMessage(messageToSend)
+            result.onSuccess {
+                if (_isNavigating.value) {
+                    _lastSentWatchMessage.value = messageToSend
+                    _watchSendError.value = null
+                }
+            }.onFailure { error ->
+                if (_isNavigating.value) {
+                    _watchSendError.value = error.message ?: "Failed to send message to watch"
+                    service.startAutoReconnect {
+                        onWatchReconnected()
+                    }
+                }
+            }
         }
     }
 

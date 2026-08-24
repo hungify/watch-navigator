@@ -452,6 +452,9 @@ class MainViewModelTest {
         val _connectionState = MutableStateFlow<WatchConnectionState>(WatchConnectionState.Disconnected())
         override val connectionState: StateFlow<WatchConnectionState> = _connectionState.asStateFlow()
 
+        private val _isReconnecting = MutableStateFlow(false)
+        override val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
+
         var permissionsGranted = true
         var connectionStateToReturn: WatchConnectionState = WatchConnectionState.Connected("HUAWEI WATCH GT 5", "GT5-PRO")
         val sentMessages = mutableListOf<WatchNavMessage>()
@@ -459,6 +462,9 @@ class MainViewModelTest {
         var pingResultToReturn: Result<Boolean> = Result.success(true)
 
         var checkConnectionCount = 0
+        var autoReconnectStarted = false
+        var autoReconnectStopped = false
+        var onReconnectedCallback: (suspend () -> Unit)? = null
 
         override suspend fun checkPermissions(): Boolean = permissionsGranted
 
@@ -467,6 +473,7 @@ class MainViewModelTest {
             _connectionState.value = connectionStateToReturn
             return connectionStateToReturn
         }
+
         override suspend fun sendNavMessage(message: WatchNavMessage): Result<Unit> {
             sentMessages.add(message)
             return sendResultToReturn
@@ -474,7 +481,22 @@ class MainViewModelTest {
 
         override suspend fun pingWatch(): Result<Boolean> = pingResultToReturn
 
+        override fun startAutoReconnect(onReconnected: (suspend () -> Unit)?) {
+            autoReconnectStarted = true
+            autoReconnectStopped = false
+            _isReconnecting.value = true
+            this.onReconnectedCallback = onReconnected
+        }
+
+        override fun stopAutoReconnect() {
+            autoReconnectStopped = true
+            autoReconnectStarted = false
+            _isReconnecting.value = false
+            onReconnectedCallback = null
+        }
+
         override fun release() {
+            stopAutoReconnect()
             _connectionState.value = WatchConnectionState.Disconnected()
         }
     }
