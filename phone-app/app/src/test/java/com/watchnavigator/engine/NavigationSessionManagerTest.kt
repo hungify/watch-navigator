@@ -156,13 +156,167 @@ class NavigationSessionManagerTest {
     }
 
     @Test
-    fun sendError_capturesWatchSendFailure() = runTest(testDispatcher) {
+    fun sendError_capturesWatchSendFailureAndStartsAutoReconnect() = runTest(testDispatcher) {
         fakeWearEngineService.sendResultToReturn = Result.failure(Exception("Bluetooth lost"))
 
         sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
         advanceUntilIdle()
 
         assertThat(sessionManager.watchSendError.value).isEqualTo("Bluetooth lost")
+        assertThat(fakeWearEngineService.autoReconnectStarted).isTrue()
+    }
+
+    @Test
+    fun onWatchReconnected_resendsLatestNavigationInstructionImmediately() = runTest(testDispatcher) {
+        fakeWearEngineService.sendResultToReturn = Result.failure(Exception("Bluetooth lost"))
+
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.autoReconnectStarted).isTrue()
+        assertThat(sessionManager.watchSendError.value).isNotNull()
+
+        // Move to next step (p2) while disconnected
+        sessionManager.onLocationUpdate(p2)
+        advanceUntilIdle()
+
+        // Reconnect succeeds
+        fakeWearEngineService.sendResultToReturn = Result.success(Unit)
+        fakeWearEngineService.onReconnectedCallback?.invoke()
+        advanceUntilIdle()
+
+        assertThat(sessionManager.watchSendError.value).isNull()
+        val lastSent = fakeWearEngineService.sentMessages.last()
+        assertThat(lastSent.turn).isEqualTo("right")
+        assertThat(lastSent.street).isEqualTo("Street B")
+    }
+
+    @Test
+    fun locationUpdatesDuringDisconnect_maintainActiveSessionStateWithoutDataLoss() = runTest(testDispatcher) {
+        fakeWearEngineService.sendResultToReturn = Result.failure(Exception("Bluetooth dropped"))
+
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        assertThat(sessionManager.isNavigating.value).isTrue()
+
+        // Send intermediate locations
+        sessionManager.onLocationUpdate(LatLng(21.0002, 105.0000))
+        advanceUntilIdle()
+
+        assertThat(sessionManager.isNavigating.value).isTrue()
+        assertThat(sessionManager.navigationProgress.value).isNotNull()
+        assertThat(sessionManager.navigationProgress.value?.currentStepIndex).isEqualTo(0)
+
+        sessionManager.onLocationUpdate(p2)
+        advanceUntilIdle()
+        assertThat(sessionManager.navigationProgress.value?.currentStepIndex).isEqualTo(1)
+        assertThat(sessionManager.navigationProgress.value?.currentStep?.streetName).isEqualTo("Street B")
+    }
+
+    @Test
+    fun stopSession_stopsAutoReconnect() = runTest(testDispatcher) {
+        fakeWearEngineService.sendResultToReturn = Result.failure(Exception("Bluetooth lost"))
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.autoReconnectStarted).isTrue()
+
+        sessionManager.stopSession()
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.autoReconnectStopped).isTrue()
+    }
+
+    @Test
+    fun arrival_stopsAutoReconnect() = runTest(testDispatcher) {
+        fakeWearEngineService.sendResultToReturn = Result.failure(Exception("Bluetooth lost"))
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.autoReconnectStarted).isTrue()
+
+        // Arrival at destination
+        sessionManager.onLocationUpdate(p3)
+        advanceUntilIdle()
+
+        assertThat(sessionManager.isNavigating.value).isFalse()
+        assertThat(fakeWearEngineService.autoReconnectStopped).isTrue()
+    }
+
+    @Test
+    fun onWatchReconnected_whenNotNavigating_doesNotSendMessage() = runTest(testDispatcher) {
+        fakeWearEngineService.sentMessages.clear()
+
+        // sessionManager is not navigating
+        assertThat(sessionManager.isNavigating.value).isFalse()
+        sessionManager.onWatchReconnected()
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.sentMessages).isEmpty()
+    }
+
+    @Test
+    fun onWatchReconnected_whenResendFails_restartsAutoReconnect() = runTest(testDispatcher) {
+        fakeWearEngineService.sendResultToReturn = Result.failure(Exception("Bluetooth lost"))
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.autoReconnectStarted).isTrue()
+
+        // Reset flag to track re-trigger
+        fakeWearEngineService.autoReconnectStarted = false
+        fakeWearEngineService.sendResultToReturn = Result.failure(Exception("Still failing"))
+
+        fakeWearEngineService.onReconnectedCallback?.invoke()
+        advanceUntilIdle()
+
+        assertThat(sessionManager.watchSendError.value).isEqualTo("Still failing")
+        assertThat(fakeWearEngineService.autoReconnectStarted).isTrue()
+    }
+
+    @Test
+    fun stopSession_calledWhenAlreadyStopped_stillStopsAutoReconnect() = runTest(testDispatcher) {
+        fakeWearEngineService.autoReconnectStopped = false
+        assertThat(sessionManager.isNavigating.value).isFalse()
+
+        sessionManager.stopSession()
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.autoReconnectStopped).isTrue()
+    }
+
+    @Test
+    fun successfulSend_whenReconnecting_stopsAutoReconnect() = runTest(testDispatcher) {
+        fakeWearEngineService.sendResultToReturn = Result.failure(Exception("Bluetooth lost"))
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.autoReconnectStarted).isTrue()
+        assertThat(fakeWearEngineService.isReconnecting.value).isTrue()
+
+        // Subsequent send succeeds (e.g. location update)
+        fakeWearEngineService.sendResultToReturn = Result.success(Unit)
+        sessionManager.onLocationUpdate(p2)
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.autoReconnectStopped).isTrue()
+        assertThat(fakeWearEngineService.isReconnecting.value).isFalse()
+        assertThat(sessionManager.watchSendError.value).isNull()
+    }
+
+    @Test
+    fun arrival_updatesLastSentWatchMessageAndClearsError() = runTest(testDispatcher) {
+        sessionManager.startSession(sampleRoute, TravelMode.DRIVING, "Target Hanoi")
+        advanceUntilIdle()
+
+        // Arrival at destination
+        sessionManager.onLocationUpdate(p3)
+        advanceUntilIdle()
+
+        assertThat(sessionManager.isNavigating.value).isFalse()
+        assertThat(sessionManager.lastSentWatchMessage.value?.turn).isEqualTo(ManeuverType.ARRIVE.watchValue)
+        assertThat(sessionManager.watchSendError.value).isNull()
     }
 
     @Test
@@ -383,8 +537,14 @@ class NavigationSessionManagerTest {
         private val _connectionState = MutableStateFlow<WatchConnectionState>(WatchConnectionState.Connected("GT 5", "GT5"))
         override val connectionState: StateFlow<WatchConnectionState> = _connectionState.asStateFlow()
 
+        private val _isReconnecting = MutableStateFlow(false)
+        override val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
+
         val sentMessages = mutableListOf<WatchNavMessage>()
         var sendResultToReturn: Result<Unit> = Result.success(Unit)
+        var autoReconnectStarted = false
+        var autoReconnectStopped = false
+        var onReconnectedCallback: (suspend () -> Unit)? = null
 
         override suspend fun checkPermissions(): Boolean = true
         override suspend fun checkConnection(): WatchConnectionState = _connectionState.value
@@ -395,7 +555,24 @@ class NavigationSessionManagerTest {
         }
 
         override suspend fun pingWatch(): Result<Boolean> = Result.success(true)
-        override fun release() {}
+
+        override fun startAutoReconnect(onReconnected: (suspend () -> Unit)?) {
+            autoReconnectStarted = true
+            autoReconnectStopped = false
+            _isReconnecting.value = true
+            this.onReconnectedCallback = onReconnected
+        }
+
+        override fun stopAutoReconnect() {
+            autoReconnectStopped = true
+            autoReconnectStarted = false
+            _isReconnecting.value = false
+            onReconnectedCallback = null
+        }
+
+        override fun release() {
+            stopAutoReconnect()
+        }
     }
 
     private class FakeDirectionsService : DirectionsService {
