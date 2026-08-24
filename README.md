@@ -23,6 +23,45 @@ watch-navigator/
     └── agents/
 ```
 
+## Developer Workflow & CLI (`Makefile`)
+
+A root `Makefile` provides unified one-line commands across all subprojects:
+
+```bash
+make help          # Show scannable reference of all available developer targets
+
+# Phone App (Android)
+make device        # Pre-flight check for ADB connected device & troubleshooting
+make phone-build   # Compile Android debug APK
+make phone-install # Install debug APK to connected Android device
+make phone-run     # Build, install, and launch MainActivity on connected device
+make phone-test    # Run Phone App JVM unit test suite
+make phone-lint    # Run Android Lint analysis on Phone App
+make phone-logs    # Stream Logcat filtered for navigation & Wear Engine tags
+make phone-clean   # Clean Phone App Gradle build outputs
+
+# Watch App (Lite Wearable / GT5)
+make watch-build   # Compile TypeScript to JS watch bundle
+make watch-dev     # Compile TypeScript in watch mode (auto-rebuild)
+make watch-test    # Run Watch App unit tests, linter, and validation
+make watch-lint    # Run ESLint on Watch App TypeScript sources
+make watch-format  # Format Watch App code using Prettier
+make watch-validate# Validate config.json, permissions & icon assets
+make watch-clean   # Clean compiled Watch App JS bundle
+
+# Directions Proxy Server (Cloudflare Workers)
+make server-dev    # Run local Cloudflare Worker development server
+make server-test   # Run Server unit tests & typecheck
+make server-deploy # Deploy Directions Proxy Worker to Cloudflare
+
+# Monorepo / Combined
+make build         # Build both phone APK and watch JS bundle
+make test          # Run full test suite across all subprojects
+make lint          # Run linters across phone and watch modules
+make format        # Format codebase
+make clean         # Clean all build outputs and caches across modules
+```
+
 ## Phone App (`phone-app/`)
 
 ### Prerequisites
