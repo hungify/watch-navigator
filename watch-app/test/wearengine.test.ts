@@ -7,6 +7,8 @@ import type { WearEngineDriver } from '../src/wearengine.ts';
 import { decodeUtf8Bytes, WearEngineReceiver } from '../src/wearengine.ts';
 
 class MockWearEngineDriver implements WearEngineDriver {
+  public connectionHandler: ((connected: boolean) => void) | null = null;
+  public connectionSubscribeCount = 0;
   public handler: ((data: unknown) => void) | null = null;
   public subscribeCount = 0;
   public unsubscribeCount = 0;
@@ -15,6 +17,20 @@ class MockWearEngineDriver implements WearEngineDriver {
     if (this.handler) {
       this.handler(data);
     }
+  }
+
+  emitConnectionState(connected: boolean): void {
+    if (this.connectionHandler) {
+      this.connectionHandler(connected);
+    }
+  }
+
+  onConnectionStateChange(handler: (connected: boolean) => void): () => void {
+    this.connectionHandler = handler;
+    this.connectionSubscribeCount++;
+    return () => {
+      this.connectionHandler = null;
+    };
   }
 
   subscribe(handler: (data: unknown) => void): () => void {
@@ -225,4 +241,108 @@ test('WearEngineReceiver lifecycle start and stop manages driver subscription', 
   // Calling stop again is a no-op
   receiver.stop();
   assert.equal(driver.unsubscribeCount, 1);
+});
+
+test('WearEngineReceiver notifies connection listeners when receiving messages', () => {
+  const driver = new MockWearEngineDriver();
+  const connectionEvents: boolean[] = [];
+  const receiver = new WearEngineReceiver(driver, {
+    onConnectionChange: connected => {
+      connectionEvents.push(connected);
+    }
+  });
+  receiver.start();
+
+  assert.equal(receiver.getIsConnected(), false);
+  driver.emit('{"turn":"straight","distanceMeters":100}');
+
+  assert.equal(receiver.getIsConnected(), true);
+  assert.deepEqual(connectionEvents, [true]);
+
+  // Subsequent message when already connected should not re-trigger duplicate event
+  driver.emit('{"turn":"left","distanceMeters":80}');
+  assert.deepEqual(connectionEvents, [true]);
+});
+
+test('WearEngineReceiver handles explicit disconnect and connect event payloads', () => {
+  const driver = new MockWearEngineDriver();
+  const connectionEvents: boolean[] = [];
+  const receiver = new WearEngineReceiver(driver, {
+    onConnectionChange: connected => {
+      connectionEvents.push(connected);
+    }
+  });
+  receiver.start();
+
+  // Message connects
+  driver.emit('{"turn":"right","distanceMeters":50}');
+  assert.equal(receiver.getIsConnected(), true);
+
+  // Disconnect event arrives
+  driver.emit({ event: 'disconnect' });
+  assert.equal(receiver.getIsConnected(), false);
+  assert.deepEqual(connectionEvents, [true, false]);
+
+  // Reconnect event arrives
+  driver.emit({ event: 'connect' });
+  assert.equal(receiver.getIsConnected(), true);
+  assert.deepEqual(connectionEvents, [true, false, true]);
+});
+
+test('WearEngineReceiver integrates with driver onConnectionStateChange', () => {
+  const driver = new MockWearEngineDriver();
+  const connectionEvents: boolean[] = [];
+  const receiver = new WearEngineReceiver(driver);
+  receiver.onConnectionChange(connected => {
+    connectionEvents.push(connected);
+  });
+  receiver.start();
+  assert.equal(driver.connectionSubscribeCount, 1);
+
+  driver.emitConnectionState(true);
+  assert.equal(receiver.getIsConnected(), true);
+  assert.deepEqual(connectionEvents, [true]);
+
+  driver.emitConnectionState(false);
+  assert.equal(receiver.getIsConnected(), false);
+  assert.deepEqual(connectionEvents, [true, false]);
+
+  receiver.stop();
+});
+
+test('WearEngineReceiver triggers inactivity watchdog when message stream stalls', async () => {
+  const driver = new MockWearEngineDriver();
+  const connectionEvents: boolean[] = [];
+  let onDisconnected: () => void = () => {};
+  const disconnected = new Promise<void>(resolve => {
+    onDisconnected = resolve;
+  });
+
+  const receiver = new WearEngineReceiver(driver, {
+    inactivityTimeoutMs: 10,
+    onConnectionChange: connected => {
+      connectionEvents.push(connected);
+      if (!connected) {
+        onDisconnected();
+      }
+    }
+  });
+  receiver.start();
+
+  driver.emit('{"turn":"left","distanceMeters":200}');
+  assert.equal(receiver.getIsConnected(), true);
+  assert.deepEqual(connectionEvents, [true]);
+
+  // Await the real disconnection signal emitted by the watchdog
+  await disconnected;
+
+  assert.equal(receiver.getIsConnected(), false);
+  assert.deepEqual(connectionEvents, [true, false]);
+
+  // Packet resumes
+  driver.emit('{"turn":"left","distanceMeters":150}');
+  assert.equal(receiver.getIsConnected(), true);
+  assert.deepEqual(connectionEvents, [true, false, true]);
+
+  receiver.stop();
 });

@@ -31,13 +31,14 @@ function createPageInstance(): WatchPageIndexPage {
     data: { ...page.data },
     distance: page.data.distance,
     distanceUnit: page.data.distanceUnit,
+    hasConnectionWarning: page.data.hasConnectionWarning,
     isArrived: page.data.isArrived,
+    isConnected: page.data.isConnected,
     isNavigating: page.data.isNavigating,
     statusText: page.data.statusText,
     street: page.data.street,
     turnIcon: page.data.turnIcon
   };
-
   return instance as unknown as WatchPageIndexPage;
 }
 
@@ -47,6 +48,8 @@ test('Watch index page initializes with idle state', () => {
 
   assert.equal(p.isNavigating, false);
   assert.equal(p.isArrived, false);
+  assert.equal(p.isConnected, false);
+  assert.equal(p.hasConnectionWarning, false);
   assert.equal(p.statusText, 'Disconnected');
   assert.equal(p.turnIcon, '/common/turn_straight.png');
   assert.equal(p.distance, '0');
@@ -66,6 +69,8 @@ test('Watch index page delegates updateNavigation and syncs properties', () => {
 
   assert.equal(p.isNavigating, true);
   assert.equal(p.isArrived, false);
+  assert.equal(p.isConnected, true);
+  assert.equal(p.hasConnectionWarning, false);
   assert.equal(p.statusText, 'Navigating');
   assert.equal(p.turnIcon, '/common/turn_left.png');
   assert.equal(p.distance, '120');
@@ -76,7 +81,6 @@ test('Watch index page delegates updateNavigation and syncs properties', () => {
 test('Watch index page synchronizes arrival state on arrive maneuver', () => {
   const p = createPageInstance();
   p.onInit();
-
   p.updateNavigation({
     distance_m: 0,
     street: 'Keangnam Tower',
@@ -148,4 +152,44 @@ test('Watch index page integrates with WearEngine driver messages', () => {
   // Destroy page
   p.onDestroy();
   assert.equal(driver.unbindCount, 1);
+});
+
+test('Watch index page preserves cached instruction and sets warning on disconnect', () => {
+  const p = createPageInstance();
+  p.onInit();
+
+  p.updateNavigation({
+    distanceMeters: 450,
+    street: 'Nguyen Chi Thanh',
+    turn: 'turn-right'
+  });
+
+  assert.equal(p.isNavigating, true);
+  assert.equal(p.isConnected, true);
+  assert.equal(p.hasConnectionWarning, false);
+  assert.equal(p.distance, '450');
+  assert.equal(p.street, 'Nguyen Chi Thanh');
+  assert.equal(p.turnIcon, '/common/turn_right.png');
+
+  // Phone disconnects
+  p.onConnectionChange(false);
+
+  assert.equal(p.isNavigating, true);
+  assert.equal(p.isConnected, false);
+  assert.equal(p.hasConnectionWarning, true);
+  assert.equal(p.statusText, 'Disconnected');
+  // Offline instruction MUST be cached and visible
+  assert.equal(p.distance, '450');
+  assert.equal(p.street, 'Nguyen Chi Thanh');
+  assert.equal(p.turnIcon, '/common/turn_right.png');
+
+  // Reconnection restores warning-free state
+  p.onConnectionChange(true);
+
+  assert.equal(p.isNavigating, true);
+  assert.equal(p.isConnected, true);
+  assert.equal(p.hasConnectionWarning, false);
+  assert.equal(p.statusText, 'Navigating');
+  assert.equal(p.distance, '450');
+  assert.equal(p.street, 'Nguyen Chi Thanh');
 });

@@ -59,15 +59,16 @@ export interface FormattedDistance {
 }
 
 export interface WatchPageState {
-  isNavigating: boolean;
-  isArrived: boolean;
-  statusText: string;
-  turnIcon: string;
   distance: string;
   distanceUnit: string;
+  hasConnectionWarning: boolean;
+  isArrived: boolean;
+  isConnected: boolean;
+  isNavigating: boolean;
+  statusText: string;
   street: string;
+  turnIcon: string;
 }
-
 export interface WatchPageIndexPage extends WatchPageState {
   data: WatchPageState;
   session: NavigationSession;
@@ -75,10 +76,11 @@ export interface WatchPageIndexPage extends WatchPageState {
   onShow(this: WatchPageIndexPage): void;
   onHide(this: WatchPageIndexPage): void;
   onDestroy(this: WatchPageIndexPage): void;
-  initWearEngineReceiver(this: WatchPageIndexPage, driver?: WearEngineDriver | null): void;
+  initWearEngineReceiver(this: WatchPageIndexPage, driver?: null | WearEngineDriver): void;
   destroyWearEngineReceiver(this: WatchPageIndexPage): void;
-  updateNavigation(this: WatchPageIndexPage, data: unknown): void;
+  onConnectionChange(this: WatchPageIndexPage, connected: boolean): void;
   syncState(this: WatchPageIndexPage, state: WatchPageState): void;
+  updateNavigation(this: WatchPageIndexPage, data: unknown): void;
 }
 
 export function getCanonicalTurn(turn: string): string {

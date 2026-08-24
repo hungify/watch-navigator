@@ -1,6 +1,12 @@
 <div class="container">
     <div class="header">
-        <text class="status-text">{{ statusText }}</text>
+        <div class="status-container">
+            <div class="status-dot {{ isConnected ? 'status-dot-connected' : 'status-dot-disconnected' }}" show="{{ isNavigating }}"></div>
+            <text class="status-text">{{ statusText }}</text>
+            <div class="warning-badge" show="{{ hasConnectionWarning }}">
+                <text class="warning-badge-text">Offline</text>
+            </div>
+        </div>
     </div>
 
     <div class="navigation-content" show="{{ isNavigating && !isArrived }}">

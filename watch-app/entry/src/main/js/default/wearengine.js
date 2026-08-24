@@ -1,4 +1,5 @@
 import { isValidNavigationPayload } from "./types.js";
+export const DEFAULT_INACTIVITY_TIMEOUT_MS = 15000;
 function resolveSystemWearEngineDriver() {
     try {
         const globalScope = globalThis;
@@ -129,24 +130,63 @@ function decodeRawData(raw) {
     return null;
 }
 export class WearEngineReceiver {
-    constructor(driver, onMessageCallback) {
+    constructor(driver, onMessageOrCallbackOrOptions, options) {
+        this.cleanupConnectionSubscription = null;
         this.cleanupSubscription = null;
+        this.connectionListeners = new Set();
+        this.inactivityTimeoutMs = 0;
+        this.isConnected = false;
         this.listeners = new Set();
+        this.watchdogTimer = null;
         if (driver !== undefined) {
             this.driver = driver;
         }
         else {
             this.driver = resolveSystemWearEngineDriver();
         }
-        if (onMessageCallback) {
-            this.listeners.add(onMessageCallback);
+        let opts = options;
+        if (typeof onMessageOrCallbackOrOptions === 'function') {
+            this.listeners.add(onMessageOrCallbackOrOptions);
+        }
+        else if (onMessageOrCallbackOrOptions && typeof onMessageOrCallbackOrOptions === 'object') {
+            opts = onMessageOrCallbackOrOptions;
+        }
+        if (opts) {
+            if (opts.inactivityTimeoutMs && opts.inactivityTimeoutMs > 0) {
+                this.inactivityTimeoutMs = opts.inactivityTimeoutMs;
+            }
+            if (opts.onMessage) {
+                this.listeners.add(opts.onMessage);
+            }
+            if (opts.onConnectionChange) {
+                this.connectionListeners.add(opts.onConnectionChange);
+            }
         }
     }
+    getIsConnected() {
+        return this.isConnected;
+    }
     handleRawMessage(raw) {
-        const payload = this.parsePayload(raw);
+        const candidate = decodeRawData(raw);
+        // Check for explicit disconnect or connection event payloads
+        if (candidate && typeof candidate === 'object') {
+            const obj = candidate;
+            if (obj.event === 'disconnect' || obj.type === 'disconnect' || obj.connected === false) {
+                this.notifyConnectionChange(false);
+                return true;
+            }
+            if (obj.event === 'connect' || obj.type === 'connect' || obj.connected === true) {
+                this.notifyConnectionChange(true);
+                if (!isValidNavigationPayload(candidate)) {
+                    return true;
+                }
+            }
+        }
+        const payload = this.parsePayload(candidate);
         if (!payload) {
             return false;
         }
+        this.notifyConnectionChange(true);
         for (const listener of this.listeners) {
             try {
                 listener(payload);
@@ -160,11 +200,20 @@ export class WearEngineReceiver {
     isListening() {
         return this.cleanupSubscription !== null;
     }
+    onConnectionChange(callback) {
+        this.connectionListeners.add(callback);
+        return () => {
+            this.connectionListeners.delete(callback);
+        };
+    }
     onMessage(callback) {
         this.listeners.add(callback);
         return () => {
             this.listeners.delete(callback);
         };
+    }
+    setConnected(connected) {
+        this.notifyConnectionChange(connected);
     }
     start() {
         if (this.cleanupSubscription || !this.driver) {
@@ -182,8 +231,17 @@ export class WearEngineReceiver {
                         this.driver.unsubscribe(boundHandler);
                     }
                 };
+        if (typeof this.driver.onConnectionStateChange === 'function') {
+            const connCleanup = this.driver.onConnectionStateChange((connected) => {
+                this.notifyConnectionChange(connected);
+            });
+            if (typeof connCleanup === 'function') {
+                this.cleanupConnectionSubscription = connCleanup;
+            }
+        }
     }
     stop() {
+        this.clearWatchdog();
         if (this.cleanupSubscription) {
             try {
                 this.cleanupSubscription();
@@ -193,9 +251,51 @@ export class WearEngineReceiver {
             }
             this.cleanupSubscription = null;
         }
+        if (this.cleanupConnectionSubscription) {
+            try {
+                this.cleanupConnectionSubscription();
+            }
+            catch (err) {
+                console.warn('Error unsubscribing WearEngine connection driver:', err);
+            }
+            this.cleanupConnectionSubscription = null;
+        }
+    }
+    clearWatchdog() {
+        if (this.watchdogTimer !== null) {
+            clearTimeout(this.watchdogTimer);
+            this.watchdogTimer = null;
+        }
+    }
+    notifyConnectionChange(connected) {
+        if (connected) {
+            this.resetWatchdog();
+        }
+        else {
+            this.clearWatchdog();
+        }
+        if (this.isConnected === connected) {
+            return;
+        }
+        this.isConnected = connected;
+        for (const listener of this.connectionListeners) {
+            try {
+                listener(connected);
+            }
+            catch (err) {
+                console.warn('Error in WearEngine connection listener:', err);
+            }
+        }
     }
     parsePayload(raw) {
-        const candidate = decodeRawData(raw);
-        return isValidNavigationPayload(candidate) ? candidate : null;
+        return isValidNavigationPayload(raw) ? raw : null;
+    }
+    resetWatchdog() {
+        this.clearWatchdog();
+        if (this.inactivityTimeoutMs > 0) {
+            this.watchdogTimer = setTimeout(() => {
+                this.notifyConnectionChange(false);
+            }, this.inactivityTimeoutMs);
+        }
     }
 }

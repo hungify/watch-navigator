@@ -14,9 +14,49 @@
     align-items: center;
 }
 
+.status-container {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin-right: 6px;
+}
+
+.status-dot-connected {
+    background-color: #00E676;
+}
+
+.status-dot-disconnected {
+    background-color: #FF5252;
+}
+
 .status-text {
     font-size: 20px;
     color: #888888;
+    text-align: center;
+}
+
+.warning-badge {
+    background-color: #FF5252;
+    border-radius: 8px;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    margin-left: 8px;
+    justify-content: center;
+    align-items: center;
+}
+
+.warning-badge-text {
+    font-size: 14px;
+    color: #FFFFFF;
+    font-weight: bold;
     text-align: center;
 }
 
