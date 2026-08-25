@@ -13,7 +13,6 @@ import org.junit.Before
 import org.junit.Test
 
 class SharedPreferencesRepositoryTest {
-
     private val context: Context = mockk(relaxed = true)
     private val prefs: SharedPreferences = mockk(relaxed = true)
     private val editor: SharedPreferences.Editor = mockk(relaxed = true)
@@ -54,11 +53,12 @@ class SharedPreferencesRepositoryTest {
 
     @Test
     fun savePreferences_writesAllFieldsAndCommits() {
-        val toSave = UserPreferences(
-            defaultTravelMode = TravelMode.WALKING,
-            drivingVibrationThresholdMeters = 175,
-            walkingVibrationThresholdMeters = 60
-        )
+        val toSave =
+            UserPreferences(
+                defaultTravelMode = TravelMode.WALKING,
+                drivingVibrationThresholdMeters = 175,
+                walkingVibrationThresholdMeters = 60
+            )
 
         val travelModeSlot = slot<String>()
         val drivingSlot = slot<Int>()

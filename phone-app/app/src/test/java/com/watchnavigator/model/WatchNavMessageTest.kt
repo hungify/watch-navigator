@@ -4,14 +4,14 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class WatchNavMessageTest {
-
     @Test
     fun toJsonString_producesCompactJson() {
-        val message = WatchNavMessage(
-            turn = "left",
-            distanceMeters = 120,
-            street = "Nguyen Trai"
-        )
+        val message =
+            WatchNavMessage(
+                turn = "left",
+                distanceMeters = 120,
+                street = "Nguyen Trai"
+            )
         val jsonStr = message.toJsonString()
 
         assertThat(jsonStr).isEqualTo("""{"turn":"left","distanceMeters":120,"street":"Nguyen Trai"}""")
@@ -19,11 +19,12 @@ class WatchNavMessageTest {
 
     @Test
     fun toJsonString_isUnder100Bytes() {
-        val message = WatchNavMessage(
-            turn = "turn-sharp-left",
-            distanceMeters = 1500,
-            street = "Duong Nguyen Trai Thanh Xuan"
-        )
+        val message =
+            WatchNavMessage(
+                turn = "turn-sharp-left",
+                distanceMeters = 1500,
+                street = "Duong Nguyen Trai Thanh Xuan"
+            )
         val jsonBytes = message.toJsonString().toByteArray(Charsets.UTF_8)
         assertThat(jsonBytes.size).isLessThan(100)
     }
@@ -70,16 +71,17 @@ class WatchNavMessageTest {
 
     @Test
     fun fromNavStep_createsMessageFromStepModel() {
-        val step = NavStep(
-            instruction = "Turn left onto Nguyen Trai",
-            streetName = "Nguyen Trai",
-            maneuver = ManeuverType.TURN_LEFT,
-            distanceMeters = 250,
-            durationSeconds = 60,
-            startLocation = LatLng(21.0, 105.8),
-            endLocation = LatLng(21.01, 105.81),
-            polylinePoints = emptyList()
-        )
+        val step =
+            NavStep(
+                instruction = "Turn left onto Nguyen Trai",
+                streetName = "Nguyen Trai",
+                maneuver = ManeuverType.TURN_LEFT,
+                distanceMeters = 250,
+                durationSeconds = 60,
+                startLocation = LatLng(21.0, 105.8),
+                endLocation = LatLng(21.01, 105.81),
+                polylinePoints = emptyList()
+            )
 
         val message = WatchNavMessage.fromNavStep(step)
         assertThat(message.turn).isEqualTo("left")
@@ -89,16 +91,17 @@ class WatchNavMessageTest {
 
     @Test
     fun fromNavStep_withCustomRemainingDistance() {
-        val step = NavStep(
-            instruction = "Turn right onto Le Van Luong",
-            streetName = "Le Van Luong",
-            maneuver = ManeuverType.TURN_RIGHT,
-            distanceMeters = 500,
-            durationSeconds = 120,
-            startLocation = LatLng(21.0, 105.8),
-            endLocation = LatLng(21.01, 105.81),
-            polylinePoints = emptyList()
-        )
+        val step =
+            NavStep(
+                instruction = "Turn right onto Le Van Luong",
+                streetName = "Le Van Luong",
+                maneuver = ManeuverType.TURN_RIGHT,
+                distanceMeters = 500,
+                durationSeconds = 120,
+                startLocation = LatLng(21.0, 105.8),
+                endLocation = LatLng(21.01, 105.81),
+                polylinePoints = emptyList()
+            )
 
         val message = WatchNavMessage.fromNavStep(step, remainingDistanceMeters = 80)
         assertThat(message.turn).isEqualTo("right")

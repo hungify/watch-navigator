@@ -32,7 +32,6 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelTest {
-
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var fakePlacesService: FakePlacesSearchService
     private lateinit var fakeDirectionsService: FakeDirectionsService
@@ -49,13 +48,14 @@ class MainViewModelTest {
         fakeWearEngineService = FakeWearEngineService()
         fakePreferencesRepository = FakePreferencesRepository()
         sessionManager = NavigationSessionManager(fakeWearEngineService, fakeDirectionsService, testDispatcher)
-        viewModel = MainViewModel(
-            fakePlacesService,
-            fakeDirectionsService,
-            fakeWearEngineService,
-            fakePreferencesRepository,
-            sessionManager
-        )
+        viewModel =
+            MainViewModel(
+                fakePlacesService,
+                fakeDirectionsService,
+                fakeWearEngineService,
+                fakePreferencesRepository,
+                sessionManager
+            )
     }
 
     @After
@@ -64,95 +64,362 @@ class MainViewModelTest {
     }
 
     @Test
-    fun travelMode_initializesFromPreferencesDefault() = runTest {
-        val walkingDefaultRepo = FakePreferencesRepository(
-            UserPreferences(defaultTravelMode = TravelMode.WALKING)
-        )
-        val vm = MainViewModel(
-            fakePlacesService,
-            fakeDirectionsService,
-            fakeWearEngineService,
-            walkingDefaultRepo,
-            sessionManager
-        )
+    fun travelMode_initializesFromPreferencesDefault() =
+        runTest {
+            val walkingDefaultRepo =
+                FakePreferencesRepository(
+                    UserPreferences(defaultTravelMode = TravelMode.WALKING)
+                )
+            val vm =
+                MainViewModel(
+                    fakePlacesService,
+                    fakeDirectionsService,
+                    fakeWearEngineService,
+                    walkingDefaultRepo,
+                    sessionManager
+                )
 
-        assertThat(vm.travelMode.value).isEqualTo(TravelMode.WALKING)
-    }
-
-    @Test
-    fun refreshTravelModeFromPreferences_whenNotNavigating_appliesLatestDefault() = runTest {
-        assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.DRIVING)
-
-        fakePreferencesRepository.savePreferences(UserPreferences(defaultTravelMode = TravelMode.WALKING))
-        viewModel.refreshTravelModeFromPreferences()
-
-        assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.WALKING)
-    }
+            assertThat(vm.travelMode.value).isEqualTo(TravelMode.WALKING)
+        }
 
     @Test
-    fun refreshTravelModeFromPreferences_whileNavigating_doesNotOverrideActiveMode() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
+    fun refreshTravelModeFromPreferences_whenNotNavigating_appliesLatestDefault() =
+        runTest {
+            assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.DRIVING)
 
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-        viewModel.startNavigation()
-        advanceUntilIdle()
+            fakePreferencesRepository.savePreferences(UserPreferences(defaultTravelMode = TravelMode.WALKING))
+            viewModel.refreshTravelModeFromPreferences()
 
-        fakePreferencesRepository.savePreferences(UserPreferences(defaultTravelMode = TravelMode.WALKING))
-        viewModel.refreshTravelModeFromPreferences()
-
-        assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.DRIVING)
-    }
+            assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.WALKING)
+        }
 
     @Test
-    fun refreshTravelModeFromPreferences_withSelectedDestination_recalculatesRoute() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
+    fun refreshTravelModeFromPreferences_whileNavigating_doesNotOverrideActiveMode() =
+        runTest {
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val dest = LatLng(21.0175, 105.7842)
+            fakeDirectionsService.routeToReturn = createSampleRoute(dest)
+            fakePlacesService.placeLocationToReturn = dest
 
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
+            viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+            advanceUntilIdle()
+            viewModel.startNavigation()
+            advanceUntilIdle()
 
-        assertThat(fakeDirectionsService.lastRequestedMode).isEqualTo(TravelMode.DRIVING)
+            fakePreferencesRepository.savePreferences(UserPreferences(defaultTravelMode = TravelMode.WALKING))
+            viewModel.refreshTravelModeFromPreferences()
 
-        fakePreferencesRepository.savePreferences(UserPreferences(defaultTravelMode = TravelMode.WALKING))
-        viewModel.refreshTravelModeFromPreferences()
-        advanceUntilIdle()
-
-        assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.WALKING)
-        assertThat(fakeDirectionsService.lastRequestedMode).isEqualTo(TravelMode.WALKING)
-    }
-
-    @Test
-    fun queryChanged_withDebounce_triggersSearchAndUpdatesSuggestions() = runTest {
-        fakePlacesService.suggestionsToReturn = listOf(
-            PlaceSuggestion("id1", "Keangnam Tower", "Nam Tu Liem, Hanoi", "Keangnam Tower, Nam Tu Liem, Hanoi")
-        )
-
-        viewModel.onQueryChanged("Keangnam")
-        advanceTimeBy(350)
-        advanceUntilIdle()
-
-        val state = viewModel.suggestionsState.value
-        assertThat(state).isInstanceOf(SuggestionsUiState.Success::class.java)
-        val successState = state as SuggestionsUiState.Success
-        assertThat(successState.suggestions).hasSize(1)
-        assertThat(successState.suggestions[0].primaryText).isEqualTo("Keangnam Tower")
-    }
+            assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.DRIVING)
+        }
 
     @Test
-    fun selectSuggestion_fetchesLocationAndCalculatesRoute() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+    fun refreshTravelModeFromPreferences_withSelectedDestination_recalculatesRoute() =
+        runTest {
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val dest = LatLng(21.0175, 105.7842)
+            fakeDirectionsService.routeToReturn = createSampleRoute(dest)
+            fakePlacesService.placeLocationToReturn = dest
 
-        val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
-        val destinationLocation = LatLng(21.0175, 105.7842)
-        fakePlacesService.placeLocationToReturn = destinationLocation
+            viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+            advanceUntilIdle()
 
-        val sampleRoute = NavRoute(
+            assertThat(fakeDirectionsService.lastRequestedMode).isEqualTo(TravelMode.DRIVING)
+
+            fakePreferencesRepository.savePreferences(UserPreferences(defaultTravelMode = TravelMode.WALKING))
+            viewModel.refreshTravelModeFromPreferences()
+            advanceUntilIdle()
+
+            assertThat(viewModel.travelMode.value).isEqualTo(TravelMode.WALKING)
+            assertThat(fakeDirectionsService.lastRequestedMode).isEqualTo(TravelMode.WALKING)
+        }
+
+    @Test
+    fun queryChanged_withDebounce_triggersSearchAndUpdatesSuggestions() =
+        runTest {
+            fakePlacesService.suggestionsToReturn =
+                listOf(
+                    PlaceSuggestion("id1", "Keangnam Tower", "Nam Tu Liem, Hanoi", "Keangnam Tower, Nam Tu Liem, Hanoi")
+                )
+
+            viewModel.onQueryChanged("Keangnam")
+            advanceTimeBy(350)
+            advanceUntilIdle()
+
+            val state = viewModel.suggestionsState.value
+            assertThat(state).isInstanceOf(SuggestionsUiState.Success::class.java)
+            val successState = state as SuggestionsUiState.Success
+            assertThat(successState.suggestions).hasSize(1)
+            assertThat(successState.suggestions[0].primaryText).isEqualTo("Keangnam Tower")
+        }
+
+    @Test
+    fun selectSuggestion_fetchesLocationAndCalculatesRoute() =
+        runTest {
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+
+            val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
+            val destinationLocation = LatLng(21.0175, 105.7842)
+            fakePlacesService.placeLocationToReturn = destinationLocation
+
+            val sampleRoute =
+                NavRoute(
+                    origin = LatLng(21.0285, 105.8542),
+                    destination = destinationLocation,
+                    destinationAddress = "Landmark 72, Hanoi",
+                    totalDistanceMeters = 5000,
+                    totalDurationSeconds = 900,
+                    travelMode = TravelMode.DRIVING,
+                    overviewPolyline = listOf(LatLng(21.0285, 105.8542), destinationLocation),
+                    steps =
+                        listOf(
+                            NavStep(
+                                instruction = "Head west",
+                                streetName = "Nguyen Trai",
+                                maneuver = ManeuverType.STRAIGHT,
+                                distanceMeters = 5000,
+                                durationSeconds = 900,
+                                startLocation = LatLng(21.0285, 105.8542),
+                                endLocation = destinationLocation,
+                                polylinePoints = emptyList()
+                            )
+                        )
+                )
+            fakeDirectionsService.routeToReturn = sampleRoute
+
+            viewModel.selectSuggestion(suggestion)
+            advanceUntilIdle()
+
+            val routeState = viewModel.routeState.value
+            assertThat(routeState).isInstanceOf(RouteUiState.Success::class.java)
+            val routeSuccess = routeState as RouteUiState.Success
+            assertThat(routeSuccess.route.totalDistanceMeters).isEqualTo(5000)
+        }
+
+    @Test
+    fun travelModeChange_triggersRouteRecalculation() =
+        runTest {
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
+            val destinationLocation = LatLng(21.0175, 105.7842)
+            fakePlacesService.placeLocationToReturn = destinationLocation
+            fakeDirectionsService.routeToReturn = createSampleRoute(destinationLocation)
+
+            viewModel.selectSuggestion(suggestion)
+            advanceUntilIdle()
+
+            viewModel.setTravelMode(TravelMode.WALKING)
+            advanceUntilIdle()
+
+            assertThat(fakeDirectionsService.lastRequestedMode).isEqualTo(TravelMode.WALKING)
+        }
+
+    @Test
+    fun routeCalculationError_updatesRouteStateToError() =
+        runTest {
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val suggestion = PlaceSuggestion("p1", "Unknown Place", "Hanoi", "Unknown Place, Hanoi")
+            val destinationLocation = LatLng(21.0175, 105.7842)
+            fakePlacesService.placeLocationToReturn = destinationLocation
+            fakeDirectionsService.exceptionToThrow = RuntimeException("Route not found")
+
+            viewModel.selectSuggestion(suggestion)
+            advanceUntilIdle()
+
+            val routeState = viewModel.routeState.value
+            assertThat(routeState).isInstanceOf(RouteUiState.Error::class.java)
+            assertThat((routeState as RouteUiState.Error).message).contains("Route not found")
+        }
+
+    @Test
+    fun selectSuggestion_resetsDestinationLatLngImmediately() =
+        runTest {
+            val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
+            viewModel.selectSuggestion(suggestion)
+
+            assertThat(viewModel.selectedDestination.value).isEqualTo(suggestion)
+            assertThat(viewModel.destinationLatLng.value).isNull()
+            assertThat(viewModel.suggestionsState.value).isEqualTo(SuggestionsUiState.Idle)
+        }
+
+    @Test
+    fun watchConnectionState_reflectsWearEngineServiceState() =
+        runTest {
+            fakeWearEngineService.connectionStateToReturn = WatchConnectionState.Connected("HUAWEI WATCH GT 5", "GT5-PRO")
+            viewModel.checkWatchConnection()
+            advanceUntilIdle()
+
+            val state = viewModel.watchConnectionState.value
+            assertThat(state).isInstanceOf(WatchConnectionState.Connected::class.java)
+            assertThat((state as WatchConnectionState.Connected).deviceName).isEqualTo("HUAWEI WATCH GT 5")
+        }
+
+    @Test
+    fun startNavigation_dispatchesFirstTurnMessageToWatch() =
+        runTest {
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val dest = LatLng(21.0175, 105.7842)
+            val route = createSampleRoute(dest)
+            fakeDirectionsService.routeToReturn = route
+            fakePlacesService.placeLocationToReturn = dest
+
+            viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+            advanceUntilIdle()
+
+            viewModel.startNavigation()
+            advanceUntilIdle()
+
+            assertThat(viewModel.isNavigating.value).isTrue()
+            assertThat(viewModel.currentStepIndex.value).isEqualTo(0)
+            assertThat(fakeWearEngineService.sentMessages).hasSize(1)
+            val sent = fakeWearEngineService.sentMessages[0]
+            assertThat(sent.turn).isEqualTo("straight")
+            assertThat(sent.distanceMeters).isEqualTo(5000)
+            assertThat(sent.street).isEqualTo("Nguyen Trai")
+            assertThat(viewModel.lastSentWatchMessage.value).isEqualTo(sent)
+        }
+
+    @Test
+    fun updateNavigationStep_sendsUpdatedMessageToWatch() =
+        runTest {
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val dest = LatLng(21.0175, 105.7842)
+            val route =
+                NavRoute(
+                    origin = LatLng(21.0285, 105.8542),
+                    destination = dest,
+                    destinationAddress = "Landmark 72, Hanoi",
+                    totalDistanceMeters = 5000,
+                    totalDurationSeconds = 900,
+                    travelMode = TravelMode.DRIVING,
+                    overviewPolyline = listOf(LatLng(21.0285, 105.8542), dest),
+                    steps =
+                        listOf(
+                            NavStep("Head straight", "Nguyen Trai", ManeuverType.STRAIGHT, 2000, 300, LatLng(21.0, 105.8), LatLng(21.01, 105.8), emptyList()),
+                            NavStep("Turn left onto Tran Phu", "Tran Phu", ManeuverType.TURN_LEFT, 3000, 600, LatLng(21.01, 105.8), dest, emptyList())
+                        )
+                )
+            fakeDirectionsService.routeToReturn = route
+            fakePlacesService.placeLocationToReturn = dest
+
+            viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+            advanceUntilIdle()
+
+            viewModel.startNavigation()
+            advanceUntilIdle()
+
+            // Advance to step 1 with 150m remaining
+            viewModel.updateNavigationStep(1, remainingDistanceMeters = 150)
+            advanceUntilIdle()
+
+            assertThat(viewModel.currentStepIndex.value).isEqualTo(1)
+            assertThat(fakeWearEngineService.sentMessages).hasSize(2)
+            val secondMsg = fakeWearEngineService.sentMessages[1]
+            assertThat(secondMsg.turn).isEqualTo("left")
+            assertThat(secondMsg.distanceMeters).isEqualTo(150)
+            assertThat(secondMsg.street).isEqualTo("Tran Phu")
+        }
+
+    @Test
+    fun stopNavigation_resetsNavigatingStateAndSendsStopMessage() =
+        runTest {
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val dest = LatLng(21.0175, 105.7842)
+            fakeDirectionsService.routeToReturn = createSampleRoute(dest)
+            fakePlacesService.placeLocationToReturn = dest
+
+            viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+            advanceUntilIdle()
+
+            viewModel.startNavigation()
+            assertThat(viewModel.isNavigating.value).isTrue()
+
+            viewModel.stopNavigation()
+            advanceUntilIdle()
+
+            assertThat(viewModel.isNavigating.value).isFalse()
+            assertThat(viewModel.currentStepIndex.value).isEqualTo(0)
+            val lastMsg = fakeWearEngineService.sentMessages.lastOrNull()
+            assertThat(lastMsg).isNotNull()
+            assertThat(lastMsg?.turn).isEqualTo(WatchNavMessage.TERMINAL_TURN)
+        }
+
+    @Test
+    fun sendWatchMessage_whenSendFails_updatesWatchSendError() =
+        runTest {
+            fakeWearEngineService.sendResultToReturn = Result.failure(RuntimeException("Transmission failed"))
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val dest = LatLng(21.0175, 105.7842)
+            fakeDirectionsService.routeToReturn = createSampleRoute(dest)
+            fakePlacesService.placeLocationToReturn = dest
+
+            viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+            advanceUntilIdle()
+
+            viewModel.startNavigation()
+            advanceUntilIdle()
+
+            assertThat(viewModel.watchSendError.value).isEqualTo("Transmission failed")
+            assertThat(viewModel.lastSentWatchMessage.value).isNull()
+        }
+
+    @Test
+    fun checkWatchConnection_coalescesConcurrentChecks() =
+        runTest {
+            val initialCount = fakeWearEngineService.checkConnectionCount
+            viewModel.checkWatchConnection()
+            viewModel.checkWatchConnection()
+            advanceUntilIdle()
+
+            assertThat(fakeWearEngineService.checkConnectionCount).isEqualTo(initialCount + 1)
+        }
+
+    @Test
+    fun checkWatchConnection_clearsPreviousWatchSendError() =
+        runTest {
+            fakeWearEngineService.sendResultToReturn = Result.failure(RuntimeException("Transmission failed"))
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val dest = LatLng(21.0175, 105.7842)
+            fakeDirectionsService.routeToReturn = createSampleRoute(dest)
+            fakePlacesService.placeLocationToReturn = dest
+
+            viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+            advanceUntilIdle()
+
+            viewModel.startNavigation()
+            advanceUntilIdle()
+
+            assertThat(viewModel.watchSendError.value).isEqualTo("Transmission failed")
+
+            // Now user taps retry / check connection
+            viewModel.checkWatchConnection()
+            advanceUntilIdle()
+
+            assertThat(viewModel.watchSendError.value).isNull()
+        }
+
+    @Test
+    fun sendArrivalToWatch_sendsArrivalPayload() =
+        runTest {
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val dest = LatLng(21.0175, 105.7842)
+            fakeDirectionsService.routeToReturn = createSampleRoute(dest)
+            fakePlacesService.placeLocationToReturn = dest
+
+            viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+            advanceUntilIdle()
+
+            viewModel.sendArrivalToWatch()
+            advanceUntilIdle()
+
+            val lastMsg = fakeWearEngineService.sentMessages.lastOrNull()
+            assertThat(lastMsg).isNotNull()
+            assertThat(lastMsg?.turn).isEqualTo("arrive")
+            assertThat(lastMsg?.distanceMeters).isEqualTo(0)
+            assertThat(lastMsg?.street).isEqualTo("Landmark 72")
+        }
+
+    private fun createSampleRoute(destinationLocation: LatLng): NavRoute =
+        NavRoute(
             origin = LatLng(21.0285, 105.8542),
             destination = destinationLocation,
             destinationAddress = "Landmark 72, Hanoi",
@@ -160,263 +427,20 @@ class MainViewModelTest {
             totalDurationSeconds = 900,
             travelMode = TravelMode.DRIVING,
             overviewPolyline = listOf(LatLng(21.0285, 105.8542), destinationLocation),
-            steps = listOf(
-                NavStep(
-                    instruction = "Head west",
-                    streetName = "Nguyen Trai",
-                    maneuver = ManeuverType.STRAIGHT,
-                    distanceMeters = 5000,
-                    durationSeconds = 900,
-                    startLocation = LatLng(21.0285, 105.8542),
-                    endLocation = destinationLocation,
-                    polylinePoints = emptyList()
+            steps =
+                listOf(
+                    NavStep(
+                        instruction = "Head west",
+                        streetName = "Nguyen Trai",
+                        maneuver = ManeuverType.STRAIGHT,
+                        distanceMeters = 5000,
+                        durationSeconds = 900,
+                        startLocation = LatLng(21.0285, 105.8542),
+                        endLocation = destinationLocation,
+                        polylinePoints = emptyList()
+                    )
                 )
-            )
         )
-        fakeDirectionsService.routeToReturn = sampleRoute
-
-        viewModel.selectSuggestion(suggestion)
-        advanceUntilIdle()
-
-        val routeState = viewModel.routeState.value
-        assertThat(routeState).isInstanceOf(RouteUiState.Success::class.java)
-        val routeSuccess = routeState as RouteUiState.Success
-        assertThat(routeSuccess.route.totalDistanceMeters).isEqualTo(5000)
-    }
-
-    @Test
-    fun travelModeChange_triggersRouteRecalculation() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
-        val destinationLocation = LatLng(21.0175, 105.7842)
-        fakePlacesService.placeLocationToReturn = destinationLocation
-        fakeDirectionsService.routeToReturn = createSampleRoute(destinationLocation)
-
-        viewModel.selectSuggestion(suggestion)
-        advanceUntilIdle()
-
-        viewModel.setTravelMode(TravelMode.WALKING)
-        advanceUntilIdle()
-
-        assertThat(fakeDirectionsService.lastRequestedMode).isEqualTo(TravelMode.WALKING)
-    }
-
-    @Test
-    fun routeCalculationError_updatesRouteStateToError() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val suggestion = PlaceSuggestion("p1", "Unknown Place", "Hanoi", "Unknown Place, Hanoi")
-        val destinationLocation = LatLng(21.0175, 105.7842)
-        fakePlacesService.placeLocationToReturn = destinationLocation
-        fakeDirectionsService.exceptionToThrow = RuntimeException("Route not found")
-
-        viewModel.selectSuggestion(suggestion)
-        advanceUntilIdle()
-
-        val routeState = viewModel.routeState.value
-        assertThat(routeState).isInstanceOf(RouteUiState.Error::class.java)
-        assertThat((routeState as RouteUiState.Error).message).contains("Route not found")
-    }
-
-    @Test
-    fun selectSuggestion_resetsDestinationLatLngImmediately() = runTest {
-        val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
-        viewModel.selectSuggestion(suggestion)
-
-        assertThat(viewModel.selectedDestination.value).isEqualTo(suggestion)
-        assertThat(viewModel.destinationLatLng.value).isNull()
-        assertThat(viewModel.suggestionsState.value).isEqualTo(SuggestionsUiState.Idle)
-    }
-
-    @Test
-    fun watchConnectionState_reflectsWearEngineServiceState() = runTest {
-        fakeWearEngineService.connectionStateToReturn = WatchConnectionState.Connected("HUAWEI WATCH GT 5", "GT5-PRO")
-        viewModel.checkWatchConnection()
-        advanceUntilIdle()
-
-        val state = viewModel.watchConnectionState.value
-        assertThat(state).isInstanceOf(WatchConnectionState.Connected::class.java)
-        assertThat((state as WatchConnectionState.Connected).deviceName).isEqualTo("HUAWEI WATCH GT 5")
-    }
-
-    @Test
-    fun startNavigation_dispatchesFirstTurnMessageToWatch() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        val route = createSampleRoute(dest)
-        fakeDirectionsService.routeToReturn = route
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.startNavigation()
-        advanceUntilIdle()
-
-        assertThat(viewModel.isNavigating.value).isTrue()
-        assertThat(viewModel.currentStepIndex.value).isEqualTo(0)
-        assertThat(fakeWearEngineService.sentMessages).hasSize(1)
-        val sent = fakeWearEngineService.sentMessages[0]
-        assertThat(sent.turn).isEqualTo("straight")
-        assertThat(sent.distanceMeters).isEqualTo(5000)
-        assertThat(sent.street).isEqualTo("Nguyen Trai")
-        assertThat(viewModel.lastSentWatchMessage.value).isEqualTo(sent)
-    }
-
-    @Test
-    fun updateNavigationStep_sendsUpdatedMessageToWatch() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        val route = NavRoute(
-            origin = LatLng(21.0285, 105.8542),
-            destination = dest,
-            destinationAddress = "Landmark 72, Hanoi",
-            totalDistanceMeters = 5000,
-            totalDurationSeconds = 900,
-            travelMode = TravelMode.DRIVING,
-            overviewPolyline = listOf(LatLng(21.0285, 105.8542), dest),
-            steps = listOf(
-                NavStep("Head straight", "Nguyen Trai", ManeuverType.STRAIGHT, 2000, 300, LatLng(21.0, 105.8), LatLng(21.01, 105.8), emptyList()),
-                NavStep("Turn left onto Tran Phu", "Tran Phu", ManeuverType.TURN_LEFT, 3000, 600, LatLng(21.01, 105.8), dest, emptyList())
-            )
-        )
-        fakeDirectionsService.routeToReturn = route
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.startNavigation()
-        advanceUntilIdle()
-
-        // Advance to step 1 with 150m remaining
-        viewModel.updateNavigationStep(1, remainingDistanceMeters = 150)
-        advanceUntilIdle()
-
-        assertThat(viewModel.currentStepIndex.value).isEqualTo(1)
-        assertThat(fakeWearEngineService.sentMessages).hasSize(2)
-        val secondMsg = fakeWearEngineService.sentMessages[1]
-        assertThat(secondMsg.turn).isEqualTo("left")
-        assertThat(secondMsg.distanceMeters).isEqualTo(150)
-        assertThat(secondMsg.street).isEqualTo("Tran Phu")
-    }
-
-    @Test
-    fun stopNavigation_resetsNavigatingStateAndSendsStopMessage() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.startNavigation()
-        assertThat(viewModel.isNavigating.value).isTrue()
-
-        viewModel.stopNavigation()
-        advanceUntilIdle()
-
-        assertThat(viewModel.isNavigating.value).isFalse()
-        assertThat(viewModel.currentStepIndex.value).isEqualTo(0)
-        val lastMsg = fakeWearEngineService.sentMessages.lastOrNull()
-        assertThat(lastMsg).isNotNull()
-        assertThat(lastMsg?.turn).isEqualTo(WatchNavMessage.TERMINAL_TURN)
-    }
-
-    @Test
-    fun sendWatchMessage_whenSendFails_updatesWatchSendError() = runTest {
-        fakeWearEngineService.sendResultToReturn = Result.failure(RuntimeException("Transmission failed"))
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.startNavigation()
-        advanceUntilIdle()
-
-        assertThat(viewModel.watchSendError.value).isEqualTo("Transmission failed")
-        assertThat(viewModel.lastSentWatchMessage.value).isNull()
-    }
-
-
-    @Test
-    fun checkWatchConnection_coalescesConcurrentChecks() = runTest {
-        val initialCount = fakeWearEngineService.checkConnectionCount
-        viewModel.checkWatchConnection()
-        viewModel.checkWatchConnection()
-        advanceUntilIdle()
-
-        assertThat(fakeWearEngineService.checkConnectionCount).isEqualTo(initialCount + 1)
-    }
-
-    @Test
-    fun checkWatchConnection_clearsPreviousWatchSendError() = runTest {
-        fakeWearEngineService.sendResultToReturn = Result.failure(RuntimeException("Transmission failed"))
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.startNavigation()
-        advanceUntilIdle()
-
-        assertThat(viewModel.watchSendError.value).isEqualTo("Transmission failed")
-
-        // Now user taps retry / check connection
-        viewModel.checkWatchConnection()
-        advanceUntilIdle()
-
-        assertThat(viewModel.watchSendError.value).isNull()
-    }
-    @Test
-    fun sendArrivalToWatch_sendsArrivalPayload() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.sendArrivalToWatch()
-        advanceUntilIdle()
-
-        val lastMsg = fakeWearEngineService.sentMessages.lastOrNull()
-        assertThat(lastMsg).isNotNull()
-        assertThat(lastMsg?.turn).isEqualTo("arrive")
-        assertThat(lastMsg?.distanceMeters).isEqualTo(0)
-        assertThat(lastMsg?.street).isEqualTo("Landmark 72")
-    }
-
-    private fun createSampleRoute(destinationLocation: LatLng): NavRoute {
-        return NavRoute(
-            origin = LatLng(21.0285, 105.8542),
-            destination = destinationLocation,
-            destinationAddress = "Landmark 72, Hanoi",
-            totalDistanceMeters = 5000,
-            totalDurationSeconds = 900,
-            travelMode = TravelMode.DRIVING,
-            overviewPolyline = listOf(LatLng(21.0285, 105.8542), destinationLocation),
-            steps = listOf(
-                NavStep(
-                    instruction = "Head west",
-                    streetName = "Nguyen Trai",
-                    maneuver = ManeuverType.STRAIGHT,
-                    distanceMeters = 5000,
-                    durationSeconds = 900,
-                    startLocation = LatLng(21.0285, 105.8542),
-                    endLocation = destinationLocation,
-                    polylinePoints = emptyList()
-                )
-            )
-        )
-    }
 
     private class FakePlacesSearchService : PlacesSearchService {
         var suggestionsToReturn: List<PlaceSuggestion> = emptyList()
@@ -438,61 +462,69 @@ class MainViewModelTest {
     }
 
     @Test
-    fun sessionRecalculation_updatesViewModelRouteStateAndManeuver() = runTest {
-        val startLoc = LatLng(21.0285, 105.8542)
-        val destLoc = LatLng(21.0175, 105.7842)
-        val initialRoute = createSampleRoute(destLoc)
-        fakeDirectionsService.routeToReturn = initialRoute
+    fun sessionRecalculation_updatesViewModelRouteStateAndManeuver() =
+        runTest {
+            val startLoc = LatLng(21.0285, 105.8542)
+            val destLoc = LatLng(21.0175, 105.7842)
+            val initialRoute = createSampleRoute(destLoc)
+            fakeDirectionsService.routeToReturn = initialRoute
 
-        viewModel.setCurrentLocation(startLoc)
-        val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
-        fakePlacesService.placeLocationToReturn = destLoc
-        viewModel.selectSuggestion(suggestion)
-        advanceUntilIdle()
+            viewModel.setCurrentLocation(startLoc)
+            val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
+            fakePlacesService.placeLocationToReturn = destLoc
+            viewModel.selectSuggestion(suggestion)
+            advanceUntilIdle()
 
-        viewModel.startNavigation()
-        advanceUntilIdle()
-        assertThat(viewModel.isNavigating.value).isTrue()
+            viewModel.startNavigation()
+            advanceUntilIdle()
+            assertThat(viewModel.isNavigating.value).isTrue()
 
-        // Prepare a new recalculated route
-        val reroutedStep = NavStep(
-            instruction = "Turn right onto Recalculated Way",
-            streetName = "Recalculated Way",
-            maneuver = ManeuverType.TURN_RIGHT,
-            distanceMeters = 800,
-            durationSeconds = 120,
-            startLocation = LatLng(21.0300, 105.8600),
-            endLocation = destLoc,
-            polylinePoints = listOf(LatLng(21.0300, 105.8600), destLoc)
-        )
-        val recalculatedRoute = NavRoute(
-            origin = LatLng(21.0300, 105.8600),
-            destination = destLoc,
-            destinationAddress = "Landmark 72, Hanoi",
-            totalDistanceMeters = 800,
-            totalDurationSeconds = 120,
-            travelMode = TravelMode.DRIVING,
-            overviewPolyline = listOf(LatLng(21.0300, 105.8600), destLoc),
-            steps = listOf(reroutedStep)
-        )
-        fakeDirectionsService.routeToReturn = recalculatedRoute
+            // Prepare a new recalculated route
+            val reroutedStep =
+                NavStep(
+                    instruction = "Turn right onto Recalculated Way",
+                    streetName = "Recalculated Way",
+                    maneuver = ManeuverType.TURN_RIGHT,
+                    distanceMeters = 800,
+                    durationSeconds = 120,
+                    startLocation = LatLng(21.0300, 105.8600),
+                    endLocation = destLoc,
+                    polylinePoints = listOf(LatLng(21.0300, 105.8600), destLoc)
+                )
+            val recalculatedRoute =
+                NavRoute(
+                    origin = LatLng(21.0300, 105.8600),
+                    destination = destLoc,
+                    destinationAddress = "Landmark 72, Hanoi",
+                    totalDistanceMeters = 800,
+                    totalDurationSeconds = 120,
+                    travelMode = TravelMode.DRIVING,
+                    overviewPolyline = listOf(LatLng(21.0300, 105.8600), destLoc),
+                    steps = listOf(reroutedStep)
+                )
+            fakeDirectionsService.routeToReturn = recalculatedRoute
 
-        // User deviates > 100m -> triggers auto-recalculation
-        val offRouteLoc = LatLng(21.0300, 105.8600)
-        viewModel.setCurrentLocation(offRouteLoc)
-        advanceUntilIdle()
+            // User deviates > 100m -> triggers auto-recalculation
+            val offRouteLoc = LatLng(21.0300, 105.8600)
+            viewModel.setCurrentLocation(offRouteLoc)
+            advanceUntilIdle()
 
-        val updatedRouteState = viewModel.routeState.value
-        assertThat(updatedRouteState).isInstanceOf(RouteUiState.Success::class.java)
-        val routeSuccess = updatedRouteState as RouteUiState.Success
-        assertThat(routeSuccess.route.totalDistanceMeters).isEqualTo(800)
-        assertThat(viewModel.navigationProgress.value?.currentStep?.streetName).isEqualTo("Recalculated Way")
-    }
+            val updatedRouteState = viewModel.routeState.value
+            assertThat(updatedRouteState).isInstanceOf(RouteUiState.Success::class.java)
+            val routeSuccess = updatedRouteState as RouteUiState.Success
+            assertThat(routeSuccess.route.totalDistanceMeters).isEqualTo(800)
+            assertThat(
+                viewModel.navigationProgress.value
+                    ?.currentStep
+                    ?.streetName
+            ).isEqualTo("Recalculated Way")
+        }
 
     @Test
-    fun isRecalculating_flowExposedFromSessionManager() = runTest {
-        assertThat(viewModel.isRecalculating.value).isFalse()
-    }
+    fun isRecalculating_flowExposedFromSessionManager() =
+        runTest {
+            assertThat(viewModel.isRecalculating.value).isFalse()
+        }
 
     private class FakeDirectionsService : DirectionsService {
         var routeToReturn: NavRoute? = null
@@ -533,7 +565,7 @@ class MainViewModelTest {
     }
 
     private class FakeWearEngineService : WearEngineService {
-        val _connectionState = MutableStateFlow<WatchConnectionState>(WatchConnectionState.Disconnected())
+        private val _connectionState = MutableStateFlow<WatchConnectionState>(WatchConnectionState.Disconnected())
         override val connectionState: StateFlow<WatchConnectionState> = _connectionState.asStateFlow()
 
         private val _isReconnecting = MutableStateFlow(false)

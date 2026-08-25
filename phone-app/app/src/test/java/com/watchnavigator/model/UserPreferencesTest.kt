@@ -4,7 +4,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class UserPreferencesTest {
-
     @Test
     fun defaultConstructor_usesDrivingModeAndDefaultThresholds() {
         val prefs = UserPreferences()

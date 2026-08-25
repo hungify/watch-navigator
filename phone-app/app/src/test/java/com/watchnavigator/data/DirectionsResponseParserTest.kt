@@ -7,7 +7,6 @@ import org.junit.Before
 import org.junit.Test
 
 class DirectionsResponseParserTest {
-
     private lateinit var parser: DirectionsResponseParser
 
     @Before
@@ -17,60 +16,61 @@ class DirectionsResponseParserTest {
 
     @Test
     fun parse_validDirectionsJsonResponse_returnsParsedNavRoute() {
-        val json = """
-        {
-          "status": "OK",
-          "routes": [
+        val json =
+            """
             {
-              "summary": "Đ. Nguyễn Trãi",
-              "overview_polyline": {
-                "points": "_p~iF~ps|U_ulLnnqC_mqNvxqn`@"
-              },
-              "legs": [
+              "status": "OK",
+              "routes": [
                 {
-                  "distance": { "text": "7.5 km", "value": 7500 },
-                  "duration": { "text": "22 mins", "value": 1320 },
-                  "start_address": "Hoan Kiem, Hanoi, Vietnam",
-                  "end_address": "Keangnam Landmark 72, Pham Hung, Hanoi",
-                  "start_location": { "lat": 21.0285, "lng": 105.8542 },
-                  "end_location": { "lat": 21.0175, "lng": 105.7842 },
-                  "steps": [
+                  "summary": "Đ. Nguyễn Trãi",
+                  "overview_polyline": {
+                    "points": "_p~iF~ps|U_ulLnnqC_mqNvxqn`@"
+                  },
+                  "legs": [
                     {
-                      "distance": { "text": "300 m", "value": 300 },
-                      "duration": { "text": "1 min", "value": 60 },
+                      "distance": { "text": "7.5 km", "value": 7500 },
+                      "duration": { "text": "22 mins", "value": 1320 },
+                      "start_address": "Hoan Kiem, Hanoi, Vietnam",
+                      "end_address": "Keangnam Landmark 72, Pham Hung, Hanoi",
                       "start_location": { "lat": 21.0285, "lng": 105.8542 },
-                      "end_location": { "lat": 21.0290, "lng": 105.8520 },
-                      "html_instructions": "Head <b>west</b> on <b>Hàng Khay</b> toward <b>Bà Triệu</b>",
-                      "polyline": { "points": "_p~iF~ps|U" },
-                      "travel_mode": "DRIVING"
-                    },
-                    {
-                      "distance": { "text": "1.2 km", "value": 1200 },
-                      "duration": { "text": "3 mins", "value": 180 },
-                      "start_location": { "lat": 21.0290, "lng": 105.8520 },
-                      "end_location": { "lat": 21.0250, "lng": 105.8450 },
-                      "html_instructions": "Turn <b>left</b> onto <b>Tràng Thi</b>",
-                      "maneuver": "turn-left",
-                      "polyline": { "points": "_p~iF~ps|U" },
-                      "travel_mode": "DRIVING"
-                    },
-                    {
-                      "distance": { "text": "500 m", "value": 500 },
-                      "duration": { "text": "1 min", "value": 80 },
-                      "start_location": { "lat": 21.0250, "lng": 105.8450 },
                       "end_location": { "lat": 21.0175, "lng": 105.7842 },
-                      "html_instructions": "Turn <b>right</b> onto <b>Điện Biên Phủ</b>",
-                      "maneuver": "turn-right",
-                      "polyline": { "points": "_p~iF~ps|U" },
-                      "travel_mode": "DRIVING"
+                      "steps": [
+                        {
+                          "distance": { "text": "300 m", "value": 300 },
+                          "duration": { "text": "1 min", "value": 60 },
+                          "start_location": { "lat": 21.0285, "lng": 105.8542 },
+                          "end_location": { "lat": 21.0290, "lng": 105.8520 },
+                          "html_instructions": "Head <b>west</b> on <b>Hàng Khay</b> toward <b>Bà Triệu</b>",
+                          "polyline": { "points": "_p~iF~ps|U" },
+                          "travel_mode": "DRIVING"
+                        },
+                        {
+                          "distance": { "text": "1.2 km", "value": 1200 },
+                          "duration": { "text": "3 mins", "value": 180 },
+                          "start_location": { "lat": 21.0290, "lng": 105.8520 },
+                          "end_location": { "lat": 21.0250, "lng": 105.8450 },
+                          "html_instructions": "Turn <b>left</b> onto <b>Tràng Thi</b>",
+                          "maneuver": "turn-left",
+                          "polyline": { "points": "_p~iF~ps|U" },
+                          "travel_mode": "DRIVING"
+                        },
+                        {
+                          "distance": { "text": "500 m", "value": 500 },
+                          "duration": { "text": "1 min", "value": 80 },
+                          "start_location": { "lat": 21.0250, "lng": 105.8450 },
+                          "end_location": { "lat": 21.0175, "lng": 105.7842 },
+                          "html_instructions": "Turn <b>right</b> onto <b>Điện Biên Phủ</b>",
+                          "maneuver": "turn-right",
+                          "polyline": { "points": "_p~iF~ps|U" },
+                          "travel_mode": "DRIVING"
+                        }
+                      ]
                     }
                   ]
                 }
               ]
             }
-          ]
-        }
-        """.trimIndent()
+            """.trimIndent()
 
         val result = parser.parse(json, TravelMode.DRIVING)
 
@@ -104,13 +104,14 @@ class DirectionsResponseParserTest {
 
     @Test
     fun parse_zeroResults_returnsFailureWithAppropriateMessage() {
-        val json = """
-        {
-          "status": "ZERO_RESULTS",
-          "routes": [],
-          "geocoded_waypoints": []
-        }
-        """.trimIndent()
+        val json =
+            """
+            {
+              "status": "ZERO_RESULTS",
+              "routes": [],
+              "geocoded_waypoints": []
+            }
+            """.trimIndent()
 
         val result = parser.parse(json)
         assertThat(result.isFailure).isTrue()
@@ -123,12 +124,13 @@ class DirectionsResponseParserTest {
 
     @Test
     fun parse_requestDenied_returnsFailureWithErrorMessage() {
-        val json = """
-        {
-          "status": "REQUEST_DENIED",
-          "error_message": "The provided API key is invalid."
-        }
-        """.trimIndent()
+        val json =
+            """
+            {
+              "status": "REQUEST_DENIED",
+              "error_message": "The provided API key is invalid."
+            }
+            """.trimIndent()
 
         val result = parser.parse(json)
         assertThat(result.isFailure).isTrue()

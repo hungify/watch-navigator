@@ -3,7 +3,6 @@ package com.watchnavigator.util
 import com.watchnavigator.model.LatLng
 
 object PolylineDecoder {
-
     /**
      * Decodes an encoded polyline string into a list of LatLng coordinates.
      * Compatible with Google Maps Directions API polyline encoding.

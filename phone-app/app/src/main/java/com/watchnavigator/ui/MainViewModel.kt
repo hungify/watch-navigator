@@ -28,16 +28,30 @@ import kotlinx.coroutines.launch
 
 sealed class SuggestionsUiState {
     object Idle : SuggestionsUiState()
+
     object Loading : SuggestionsUiState()
-    data class Success(val suggestions: List<PlaceSuggestion>) : SuggestionsUiState()
-    data class Error(val message: String) : SuggestionsUiState()
+
+    data class Success(
+        val suggestions: List<PlaceSuggestion>
+    ) : SuggestionsUiState()
+
+    data class Error(
+        val message: String
+    ) : SuggestionsUiState()
 }
 
 sealed class RouteUiState {
     object Idle : RouteUiState()
+
     object Loading : RouteUiState()
-    data class Success(val route: NavRoute) : RouteUiState()
-    data class Error(val message: String) : RouteUiState()
+
+    data class Success(
+        val route: NavRoute
+    ) : RouteUiState()
+
+    data class Error(
+        val message: String
+    ) : RouteUiState()
 }
 
 @OptIn(FlowPreview::class)
@@ -48,7 +62,6 @@ class MainViewModel(
     private val preferencesRepository: PreferencesRepository,
     val sessionManager: NavigationSessionManager = NavigationSessionManager.getInstance(wearEngineService, directionsService)
 ) : ViewModel() {
-
     private val _queryFlow = MutableStateFlow("")
     val queryFlow: StateFlow<String> = _queryFlow.asStateFlow()
 
@@ -101,8 +114,7 @@ class MainViewModel(
                 } else if (_selectedDestination.value?.primaryText != query) {
                     performSearch(query)
                 }
-            }
-            .launchIn(viewModelScope)
+            }.launchIn(viewModelScope)
 
         checkWatchConnection()
 
@@ -128,9 +140,10 @@ class MainViewModel(
     fun checkWatchConnection() {
         if (watchConnectionJob?.isActive == true) return
         sessionManager.clearWatchSendError()
-        watchConnectionJob = viewModelScope.launch {
-            wearEngineService?.checkConnection()
-        }
+        watchConnectionJob =
+            viewModelScope.launch {
+                wearEngineService?.checkConnection()
+            }
     }
 
     fun onQueryChanged(query: String) {
@@ -139,15 +152,17 @@ class MainViewModel(
 
     private fun performSearch(query: String) {
         searchJob?.cancel()
-        searchJob = viewModelScope.launch {
-            _suggestionsState.value = SuggestionsUiState.Loading
-            val result = placesSearchService.searchSuggestions(query)
-            result.onSuccess { suggestions ->
-                _suggestionsState.value = SuggestionsUiState.Success(suggestions)
-            }.onFailure { error ->
-                _suggestionsState.value = SuggestionsUiState.Error(error.message ?: "Failed to find suggestions")
+        searchJob =
+            viewModelScope.launch {
+                _suggestionsState.value = SuggestionsUiState.Loading
+                val result = placesSearchService.searchSuggestions(query)
+                result
+                    .onSuccess { suggestions ->
+                        _suggestionsState.value = SuggestionsUiState.Success(suggestions)
+                    }.onFailure { error ->
+                        _suggestionsState.value = SuggestionsUiState.Error(error.message ?: "Failed to find suggestions")
+                    }
             }
-        }
     }
 
     fun selectSuggestion(suggestion: PlaceSuggestion) {
@@ -158,19 +173,21 @@ class MainViewModel(
 
         selectJob?.cancel()
         routeJob?.cancel()
-        selectJob = viewModelScope.launch {
-            val locResult = placesSearchService.fetchPlaceLocation(suggestion.placeId)
-            if (_selectedDestination.value?.placeId != suggestion.placeId) return@launch
-            locResult.onSuccess { latLng ->
-                if (_selectedDestination.value?.placeId != suggestion.placeId) return@onSuccess
-                _destinationLatLng.value = latLng
-                placesSearchService.createNewSessionToken()
-                fetchRouteForSelectedDestination(latLng, suggestion.placeId)
-            }.onFailure { error ->
-                if (_selectedDestination.value?.placeId != suggestion.placeId) return@onFailure
-                _routeState.value = RouteUiState.Error("Could not get location for ${suggestion.primaryText}: ${error.message}")
+        selectJob =
+            viewModelScope.launch {
+                val locResult = placesSearchService.fetchPlaceLocation(suggestion.placeId)
+                if (_selectedDestination.value?.placeId != suggestion.placeId) return@launch
+                locResult
+                    .onSuccess { latLng ->
+                        if (_selectedDestination.value?.placeId != suggestion.placeId) return@onSuccess
+                        _destinationLatLng.value = latLng
+                        placesSearchService.createNewSessionToken()
+                        fetchRouteForSelectedDestination(latLng, suggestion.placeId)
+                    }.onFailure { error ->
+                        if (_selectedDestination.value?.placeId != suggestion.placeId) return@onFailure
+                        _routeState.value = RouteUiState.Error("Could not get location for ${suggestion.primaryText}: ${error.message}")
+                    }
             }
-        }
     }
 
     fun clearSelectedDestination() {
@@ -218,7 +235,10 @@ class MainViewModel(
         fetchRouteForSelectedDestination(_destinationLatLng.value, _selectedDestination.value?.placeId)
     }
 
-    private fun fetchRouteForSelectedDestination(destinationLocation: LatLng?, destinationPlaceId: String?) {
+    private fun fetchRouteForSelectedDestination(
+        destinationLocation: LatLng?,
+        destinationPlaceId: String?
+    ) {
         val origin = _currentLocation.value
         if (origin == null) {
             _routeState.value = RouteUiState.Error("Current GPS location not available. Please enable location.")
@@ -231,22 +251,25 @@ class MainViewModel(
         }
 
         routeJob?.cancel()
-        routeJob = viewModelScope.launch {
-            _routeState.value = RouteUiState.Loading
-            val mode = _travelMode.value
-            val result = if (destinationLocation != null) {
-                directionsService.getDirections(origin, destinationLocation, mode)
-            } else {
-                directionsService.getDirectionsByPlaceId(origin, destinationPlaceId!!, mode)
-            }
+        routeJob =
+            viewModelScope.launch {
+                _routeState.value = RouteUiState.Loading
+                val mode = _travelMode.value
+                val result =
+                    if (destinationLocation != null) {
+                        directionsService.getDirections(origin, destinationLocation, mode)
+                    } else {
+                        directionsService.getDirectionsByPlaceId(origin, destinationPlaceId!!, mode)
+                    }
 
-            result.onSuccess { route ->
-                _routeState.value = RouteUiState.Success(route)
-                _currentStepIndex.value = 0
-            }.onFailure { error ->
-                _routeState.value = RouteUiState.Error(error.message ?: "Failed to calculate route")
+                result
+                    .onSuccess { route ->
+                        _routeState.value = RouteUiState.Success(route)
+                        _currentStepIndex.value = 0
+                    }.onFailure { error ->
+                        _routeState.value = RouteUiState.Error(error.message ?: "Failed to calculate route")
+                    }
             }
-        }
     }
 
     fun startNavigation() {
@@ -254,9 +277,11 @@ class MainViewModel(
         if (currentRouteState is RouteUiState.Success && currentRouteState.route.steps.isNotEmpty()) {
             val destName = _selectedDestination.value?.primaryText ?: currentRouteState.route.destinationAddress
             val mode = _travelMode.value
-            val vibrationThreshold = preferencesRepository.getUserPreferences()
-                .vibrationThresholdMetersFor(mode)
-                .toDouble()
+            val vibrationThreshold =
+                preferencesRepository
+                    .getUserPreferences()
+                    .vibrationThresholdMetersFor(mode)
+                    .toDouble()
             sessionManager.startSession(currentRouteState.route, mode, destName, vibrationThreshold)
         }
     }
@@ -265,7 +290,10 @@ class MainViewModel(
         sessionManager.stopSession()
     }
 
-    fun updateNavigationStep(stepIndex: Int, remainingDistanceMeters: Int? = null) {
+    fun updateNavigationStep(
+        stepIndex: Int,
+        remainingDistanceMeters: Int? = null
+    ) {
         val currentRouteState = _routeState.value
         if (currentRouteState is RouteUiState.Success) {
             val steps = currentRouteState.route.steps
@@ -289,7 +317,11 @@ class MainViewModel(
         }
     }
 
-    private fun dispatchStepAt(steps: List<com.watchnavigator.model.NavStep>, index: Int, remainingDistanceMeters: Int?) {
+    private fun dispatchStepAt(
+        steps: List<com.watchnavigator.model.NavStep>,
+        index: Int,
+        remainingDistanceMeters: Int?
+    ) {
         val step = steps[index]
         val dist = remainingDistanceMeters ?: step.distanceMeters
         val msg = WatchNavMessage.fromNavStep(step, dist)

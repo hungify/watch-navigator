@@ -14,7 +14,6 @@ import com.watchnavigator.model.UserPreferences
 import kotlinx.coroutines.launch
 
 class SettingsActivity : AppCompatActivity() {
-
     private lateinit var binding: ActivitySettingsBinding
 
     private val viewModel: SettingsViewModel by viewModels {
@@ -47,13 +46,21 @@ class SettingsActivity : AppCompatActivity() {
         binding.tilDrivingThreshold.error = null
         binding.tilWalkingThreshold.error = null
 
-        val drivingInput = binding.etDrivingThreshold.text?.toString()?.trim()?.toIntOrNull()
+        val drivingInput =
+            binding.etDrivingThreshold.text
+                ?.toString()
+                ?.trim()
+                ?.toIntOrNull()
         if (drivingInput == null) {
             binding.tilDrivingThreshold.error = getString(R.string.error_invalid_number)
             return
         }
 
-        val walkingInput = binding.etWalkingThreshold.text?.toString()?.trim()?.toIntOrNull()
+        val walkingInput =
+            binding.etWalkingThreshold.text
+                ?.toString()
+                ?.trim()
+                ?.toIntOrNull()
         if (walkingInput == null) {
             binding.tilWalkingThreshold.error = getString(R.string.error_invalid_number)
             return

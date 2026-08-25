@@ -1,6 +1,8 @@
 package com.watchnavigator.model
 
-enum class ManeuverType(val watchValue: String) {
+enum class ManeuverType(
+    val watchValue: String
+) {
     TURN_LEFT("left"),
     TURN_RIGHT("right"),
     TURN_SLIGHT_LEFT("slight_left"),
@@ -19,10 +21,14 @@ enum class ManeuverType(val watchValue: String) {
     ROUNDABOUT_RIGHT("roundabout"),
     DEPART("depart"),
     ARRIVE("arrive"),
-    UNKNOWN("straight");
+    UNKNOWN("straight")
+    ;
 
     companion object {
-        fun fromApiString(rawManeuver: String?, instructionText: String? = null): ManeuverType {
+        fun fromApiString(
+            rawManeuver: String?,
+            instructionText: String? = null
+        ): ManeuverType {
             if (!rawManeuver.isNullOrBlank()) {
                 val normalized = rawManeuver.trim().lowercase().replace("_", "-")
                 when (normalized) {
@@ -55,12 +61,21 @@ enum class ManeuverType(val watchValue: String) {
                     lower.contains("sharp left") || lower.contains("rẽ gắt sang trái") -> TURN_SHARP_LEFT
                     lower.contains("sharp right") || lower.contains("rẽ gắt sang phải") -> TURN_SHARP_RIGHT
                     lower.contains("slight left") || lower.contains("chếch sang trái") || lower.contains("hơi rẽ trái") -> TURN_SLIGHT_LEFT
-                    lower.contains("slight right") || lower.contains("chếch sang phải") || lower.contains("hơi rẽ phải") -> TURN_SLIGHT_RIGHT
+                    lower.contains(
+                        "slight right"
+                    ) ||
+                        lower.contains("chếch sang phải") ||
+                        lower.contains("hơi rẽ phải") -> TURN_SLIGHT_RIGHT
                     lower.contains("turn left") || lower.contains("rẽ trái") -> TURN_LEFT
                     lower.contains("turn right") || lower.contains("rẽ phải") -> TURN_RIGHT
                     lower.contains("roundabout") || lower.contains("vòng xuyến") || lower.contains("bùng binh") -> ROUNDABOUT_RIGHT
                     lower.contains("arrive") || lower.contains("đến") || lower.contains("đích") -> ARRIVE
-                    lower.contains("head ") || lower.contains("đi về hướng") || lower.contains("đi thẳng") || lower.contains("continue") -> STRAIGHT
+                    lower.contains(
+                        "head "
+                    ) ||
+                        lower.contains("đi về hướng") ||
+                        lower.contains("đi thẳng") ||
+                        lower.contains("continue") -> STRAIGHT
                     else -> STRAIGHT
                 }
             }

@@ -4,7 +4,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class HtmlHelperTest {
-
     @Test
     fun stripHtml_removesTagsAndDecodesEntities() {
         val html = "Head <b>north</b> on <b>Nguyễn Trãi</b> toward <b>Khuất Duy Tiến</b>"

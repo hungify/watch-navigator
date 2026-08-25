@@ -5,9 +5,8 @@ data class UserPreferences(
     val drivingVibrationThresholdMeters: Int = DEFAULT_DRIVING_THRESHOLD_METERS,
     val walkingVibrationThresholdMeters: Int = DEFAULT_WALKING_THRESHOLD_METERS
 ) {
-    fun vibrationThresholdMetersFor(travelMode: TravelMode): Int {
-        return if (travelMode == TravelMode.WALKING) walkingVibrationThresholdMeters else drivingVibrationThresholdMeters
-    }
+    fun vibrationThresholdMetersFor(travelMode: TravelMode): Int =
+        if (travelMode == TravelMode.WALKING) walkingVibrationThresholdMeters else drivingVibrationThresholdMeters
 
     companion object {
         const val DEFAULT_DRIVING_THRESHOLD_METERS = 150

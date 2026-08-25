@@ -7,7 +7,6 @@ import com.watchnavigator.model.NavStep
 import org.junit.Test
 
 class GeoUtilsTest {
-
     @Test
     fun distanceBetweenMeters_identicalPoints_returnsZero() {
         val p = LatLng(21.0285, 105.8542)
@@ -122,31 +121,33 @@ class GeoUtilsTest {
         val mid = LatLng(21.0010, 105.0000)
         val end = LatLng(21.0020, 105.0000)
 
-        val stepWithPoly = NavStep(
-            instruction = "Go straight",
-            streetName = "Main St",
-            maneuver = ManeuverType.STRAIGHT,
-            distanceMeters = 222,
-            durationSeconds = 60,
-            startLocation = start,
-            endLocation = end,
-            polylinePoints = listOf(start, mid, end)
-        )
+        val stepWithPoly =
+            NavStep(
+                instruction = "Go straight",
+                streetName = "Main St",
+                maneuver = ManeuverType.STRAIGHT,
+                distanceMeters = 222,
+                durationSeconds = 60,
+                startLocation = start,
+                endLocation = end,
+                polylinePoints = listOf(start, mid, end)
+            )
 
         val distWithPoly = GeoUtils.remainingDistanceAlongStep(mid, stepWithPoly)
         assertThat(distWithPoly).isGreaterThan(100)
         assertThat(distWithPoly).isLessThan(125)
 
-        val stepWithoutPoly = NavStep(
-            instruction = "Go straight",
-            streetName = "Main St",
-            maneuver = ManeuverType.STRAIGHT,
-            distanceMeters = 222,
-            durationSeconds = 60,
-            startLocation = start,
-            endLocation = end,
-            polylinePoints = emptyList()
-        )
+        val stepWithoutPoly =
+            NavStep(
+                instruction = "Go straight",
+                streetName = "Main St",
+                maneuver = ManeuverType.STRAIGHT,
+                distanceMeters = 222,
+                durationSeconds = 60,
+                startLocation = start,
+                endLocation = end,
+                polylinePoints = emptyList()
+            )
 
         val distWithoutPoly = GeoUtils.remainingDistanceAlongStep(mid, stepWithoutPoly)
         assertThat(distWithoutPoly).isGreaterThan(100)
@@ -158,16 +159,17 @@ class GeoUtilsTest {
         val start = LatLng(21.0000, 105.0000)
         val end = LatLng(21.0020, 105.0000)
 
-        val step = NavStep(
-            instruction = "Go straight",
-            streetName = "Main St",
-            maneuver = ManeuverType.STRAIGHT,
-            distanceMeters = 222,
-            durationSeconds = 60,
-            startLocation = start,
-            endLocation = end,
-            polylinePoints = listOf(start, end)
-        )
+        val step =
+            NavStep(
+                instruction = "Go straight",
+                streetName = "Main St",
+                maneuver = ManeuverType.STRAIGHT,
+                distanceMeters = 222,
+                durationSeconds = 60,
+                startLocation = start,
+                endLocation = end,
+                polylinePoints = listOf(start, end)
+            )
 
         // Point is on the line -> distance is 0
         val onLine = LatLng(21.0010, 105.0000)

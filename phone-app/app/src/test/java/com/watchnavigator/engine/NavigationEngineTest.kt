@@ -10,7 +10,6 @@ import org.junit.Before
 import org.junit.Test
 
 class NavigationEngineTest {
-
     private lateinit var sampleRoute: NavRoute
 
     // Route coordinates:
@@ -25,38 +24,41 @@ class NavigationEngineTest {
 
     @Before
     fun setUp() {
-        val step0 = NavStep(
-            instruction = "Head north on Street A",
-            streetName = "Street A",
-            maneuver = ManeuverType.STRAIGHT,
-            distanceMeters = 222,
-            durationSeconds = 60,
-            startLocation = p0,
-            endLocation = p2,
-            polylinePoints = listOf(p0, p1, p2)
-        )
+        val step0 =
+            NavStep(
+                instruction = "Head north on Street A",
+                streetName = "Street A",
+                maneuver = ManeuverType.STRAIGHT,
+                distanceMeters = 222,
+                durationSeconds = 60,
+                startLocation = p0,
+                endLocation = p2,
+                polylinePoints = listOf(p0, p1, p2)
+            )
 
-        val step1 = NavStep(
-            instruction = "Turn right onto Street B",
-            streetName = "Street B",
-            maneuver = ManeuverType.TURN_RIGHT,
-            distanceMeters = 415,
-            durationSeconds = 90,
-            startLocation = p2,
-            endLocation = p4,
-            polylinePoints = listOf(p2, p3, p4)
-        )
+        val step1 =
+            NavStep(
+                instruction = "Turn right onto Street B",
+                streetName = "Street B",
+                maneuver = ManeuverType.TURN_RIGHT,
+                distanceMeters = 415,
+                durationSeconds = 90,
+                startLocation = p2,
+                endLocation = p4,
+                polylinePoints = listOf(p2, p3, p4)
+            )
 
-        sampleRoute = NavRoute(
-            origin = p0,
-            destination = p4,
-            destinationAddress = "Hanoi Destination",
-            totalDistanceMeters = 637,
-            totalDurationSeconds = 150,
-            travelMode = TravelMode.DRIVING,
-            overviewPolyline = listOf(p0, p1, p2, p3, p4),
-            steps = listOf(step0, step1)
-        )
+        sampleRoute =
+            NavRoute(
+                origin = p0,
+                destination = p4,
+                destinationAddress = "Hanoi Destination",
+                totalDistanceMeters = 637,
+                totalDurationSeconds = 150,
+                travelMode = TravelMode.DRIVING,
+                overviewPolyline = listOf(p0, p1, p2, p3, p4),
+                steps = listOf(step0, step1)
+            )
     }
 
     @Test
@@ -176,21 +178,62 @@ class NavigationEngineTest {
 
     @Test
     fun calculateDistanceToRoute_reachesThirdUpcomingStep_withoutOverviewPolyline() {
-        val s0 = NavStep("Step 0", "S0", ManeuverType.STRAIGHT, 100, 30, LatLng(21.000, 105.000), LatLng(21.001, 105.000), listOf(LatLng(21.000, 105.000), LatLng(21.001, 105.000)))
-        val s1 = NavStep("Step 1", "S1", ManeuverType.TURN_RIGHT, 100, 30, LatLng(21.001, 105.000), LatLng(21.001, 105.001), listOf(LatLng(21.001, 105.000), LatLng(21.001, 105.001)))
-        val s2 = NavStep("Step 2", "S2", ManeuverType.TURN_LEFT, 100, 30, LatLng(21.001, 105.001), LatLng(21.002, 105.001), listOf(LatLng(21.001, 105.001), LatLng(21.002, 105.001)))
-        val s3 = NavStep("Step 3", "S3", ManeuverType.ARRIVE, 100, 30, LatLng(21.002, 105.001), LatLng(21.002, 105.002), listOf(LatLng(21.002, 105.001), LatLng(21.002, 105.002)))
+        val s0 =
+            NavStep(
+                "Step 0",
+                "S0",
+                ManeuverType.STRAIGHT,
+                100,
+                30,
+                LatLng(21.000, 105.000),
+                LatLng(21.001, 105.000),
+                listOf(LatLng(21.000, 105.000), LatLng(21.001, 105.000))
+            )
+        val s1 =
+            NavStep(
+                "Step 1",
+                "S1",
+                ManeuverType.TURN_RIGHT,
+                100,
+                30,
+                LatLng(21.001, 105.000),
+                LatLng(21.001, 105.001),
+                listOf(LatLng(21.001, 105.000), LatLng(21.001, 105.001))
+            )
+        val s2 =
+            NavStep(
+                "Step 2",
+                "S2",
+                ManeuverType.TURN_LEFT,
+                100,
+                30,
+                LatLng(21.001, 105.001),
+                LatLng(21.002, 105.001),
+                listOf(LatLng(21.001, 105.001), LatLng(21.002, 105.001))
+            )
+        val s3 =
+            NavStep(
+                "Step 3",
+                "S3",
+                ManeuverType.ARRIVE,
+                100,
+                30,
+                LatLng(21.002, 105.001),
+                LatLng(21.002, 105.002),
+                listOf(LatLng(21.002, 105.001), LatLng(21.002, 105.002))
+            )
 
-        val multiStepRoute = NavRoute(
-            origin = LatLng(21.000, 105.000),
-            destination = LatLng(21.002, 105.002),
-            destinationAddress = "Multi Step Dest",
-            totalDistanceMeters = 400,
-            totalDurationSeconds = 120,
-            travelMode = TravelMode.DRIVING,
-            overviewPolyline = emptyList(),
-            steps = listOf(s0, s1, s2, s3)
-        )
+        val multiStepRoute =
+            NavRoute(
+                origin = LatLng(21.000, 105.000),
+                destination = LatLng(21.002, 105.002),
+                destinationAddress = "Multi Step Dest",
+                totalDistanceMeters = 400,
+                totalDurationSeconds = 120,
+                travelMode = TravelMode.DRIVING,
+                overviewPolyline = emptyList(),
+                steps = listOf(s0, s1, s2, s3)
+            )
 
         val engine = NavigationEngine(multiStepRoute)
         // Engine is at step 0 (index 0); user location is midway on step 3 (index 3, 3 steps ahead)
