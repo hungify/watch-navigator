@@ -3,9 +3,9 @@ package com.watchnavigator.engine
 import com.watchnavigator.data.DirectionsService
 import com.watchnavigator.data.WearEngineService
 import com.watchnavigator.model.LatLng
+import com.watchnavigator.model.ManeuverType
 import com.watchnavigator.model.NavRoute
 import com.watchnavigator.model.TravelMode
-import com.watchnavigator.model.ManeuverType
 import com.watchnavigator.model.WatchNavMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -72,6 +72,7 @@ class NavigationSessionManager(
     private var activeRecalculationJob: Job? = null
 
     private var currentVibrationThreshold: Double = NavigationEngine.DEFAULT_STEP_ADVANCE_THRESHOLD_METERS
+
     init {
         scope.launch {
             for (msg in messageChannel) {
@@ -117,13 +118,14 @@ class NavigationSessionManager(
 
         if (route.steps.isNotEmpty()) {
             val initialStep = route.steps[0]
-            val initialProgress = NavigationProgress(
-                currentStepIndex = 0,
-                currentStep = initialStep,
-                remainingDistanceToNextTurnMeters = initialStep.distanceMeters,
-                totalRemainingDistanceMeters = route.totalDistanceMeters,
-                isArrived = false
-            )
+            val initialProgress =
+                NavigationProgress(
+                    currentStepIndex = 0,
+                    currentStep = initialStep,
+                    remainingDistanceToNextTurnMeters = initialStep.distanceMeters,
+                    totalRemainingDistanceMeters = route.totalDistanceMeters,
+                    isArrived = false
+                )
             _navigationProgress.value = initialProgress
             sendWatchMessage(WatchNavMessage.fromNavStep(initialStep, initialStep.distanceMeters))
         }
@@ -154,26 +156,29 @@ class NavigationSessionManager(
             consecutiveOffRouteCount++
             val now = timeProvider()
             val timeSinceLastRecalc = now - lastRecalculationTimeMs
-            val shouldTrigger = !_isRecalculating.value &&
+            val shouldTrigger =
+                !_isRecalculating.value &&
                     (consecutiveOffRouteCount >= consecutiveOffRouteThreshold || progress.offRouteDistanceMeters >= 100.0) &&
                     (lastRecalculationTimeMs == 0L || timeSinceLastRecalc >= recalculationCooldownMs)
 
             if (shouldTrigger && directionsService != null && destinationLocation != null) {
                 triggerAutoRecalculation(location)
             } else {
-                val msg = WatchNavMessage.fromNavStep(
-                    progress.currentStep,
-                    progress.remainingDistanceToNextTurnMeters
-                )
+                val msg =
+                    WatchNavMessage.fromNavStep(
+                        progress.currentStep,
+                        progress.remainingDistanceToNextTurnMeters
+                    )
                 sendWatchMessage(msg)
             }
         } else {
             consecutiveOffRouteCount = 0
             _recalculationError.value = null
-            val msg = WatchNavMessage.fromNavStep(
-                progress.currentStep,
-                progress.remainingDistanceToNextTurnMeters
-            )
+            val msg =
+                WatchNavMessage.fromNavStep(
+                    progress.currentStep,
+                    progress.remainingDistanceToNextTurnMeters
+                )
             sendWatchMessage(msg)
         }
     }
@@ -190,56 +195,60 @@ class NavigationSessionManager(
         lastRecalculationTimeMs = timeProvider()
 
         activeRecalculationJob?.cancel()
-        activeRecalculationJob = scope.launch {
-            try {
-                val result = service.getDirections(
-                    origin = currentLocation,
-                    destination = dest,
-                    mode = _activeTravelMode.value
-                )
-
-                result.onSuccess { newRoute ->
-                    if (sessionId != currentSessionId || !_isNavigating.value) return@onSuccess
-
-                    _activeRoute.value = newRoute
-                    _recalculationError.value = null
-                    consecutiveOffRouteCount = 0
-
-                    val newEngine = engineFactory(newRoute, currentVibrationThreshold)
-                    navigationEngine = newEngine
-
-                    val latestLoc = _lastLocation.value ?: currentLocation
-                    val newProgress = newEngine.processLocation(latestLoc)
-                    _navigationProgress.value = newProgress
-
-                    if (newProgress.isArrived) {
-                        val arrivalMsg = WatchNavMessage.arrival(destinationName)
-                        sendWatchMessage(arrivalMsg)
-                        _isNavigating.value = false
-                        wearEngineService?.stopAutoReconnect()
-                    } else {
-                        val msg = WatchNavMessage.fromNavStep(
-                            newProgress.currentStep,
-                            newProgress.remainingDistanceToNextTurnMeters
+        activeRecalculationJob =
+            scope.launch {
+                try {
+                    val result =
+                        service.getDirections(
+                            origin = currentLocation,
+                            destination = dest,
+                            mode = _activeTravelMode.value
                         )
-                        sendWatchMessage(msg)
+
+                    result
+                        .onSuccess { newRoute ->
+                            if (sessionId != currentSessionId || !_isNavigating.value) return@onSuccess
+
+                            _activeRoute.value = newRoute
+                            _recalculationError.value = null
+                            consecutiveOffRouteCount = 0
+
+                            val newEngine = engineFactory(newRoute, currentVibrationThreshold)
+                            navigationEngine = newEngine
+
+                            val latestLoc = _lastLocation.value ?: currentLocation
+                            val newProgress = newEngine.processLocation(latestLoc)
+                            _navigationProgress.value = newProgress
+
+                            if (newProgress.isArrived) {
+                                val arrivalMsg = WatchNavMessage.arrival(destinationName)
+                                sendWatchMessage(arrivalMsg)
+                                _isNavigating.value = false
+                                wearEngineService?.stopAutoReconnect()
+                            } else {
+                                val msg =
+                                    WatchNavMessage.fromNavStep(
+                                        newProgress.currentStep,
+                                        newProgress.remainingDistanceToNextTurnMeters
+                                    )
+                                sendWatchMessage(msg)
+                            }
+                        }.onFailure { error ->
+                            if (sessionId != currentSessionId || !_isNavigating.value) return@onFailure
+                            _recalculationError.value = error.message ?: "Failed to recalculate route"
+                        }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (sessionId == currentSessionId && _isNavigating.value) {
+                        _recalculationError.value = e.message ?: "Route recalculation failed"
                     }
-                }.onFailure { error ->
-                    if (sessionId != currentSessionId || !_isNavigating.value) return@onFailure
-                    _recalculationError.value = error.message ?: "Failed to recalculate route"
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (sessionId == currentSessionId && _isNavigating.value) {
-                    _recalculationError.value = e.message ?: "Route recalculation failed"
-                }
-            } finally {
-                if (sessionId == currentSessionId) {
-                    _isRecalculating.value = false
+                } finally {
+                    if (sessionId == currentSessionId) {
+                        _isRecalculating.value = false
+                    }
                 }
             }
-        }
     }
 
     /**
@@ -274,52 +283,56 @@ class NavigationSessionManager(
             return
         }
         val result = service.sendNavMessage(msg)
-        result.onSuccess {
-            if (service.isReconnecting.value) {
-                service.stopAutoReconnect()
-            }
-            if (_isNavigating.value || msg.turn == WatchNavMessage.TERMINAL_TURN || msg.turn == ManeuverType.ARRIVE.watchValue) {
-                _lastSentWatchMessage.value = msg
-                _watchSendError.value = null
-            }
-        }.onFailure { error ->
-            _watchSendError.value = error.message ?: "Failed to send message to watch"
-            if (_isNavigating.value) {
-                service.startAutoReconnect {
-                    onWatchReconnected()
+        result
+            .onSuccess {
+                if (service.isReconnecting.value) {
+                    service.stopAutoReconnect()
+                }
+                if (_isNavigating.value || msg.turn == WatchNavMessage.TERMINAL_TURN || msg.turn == ManeuverType.ARRIVE.watchValue) {
+                    _lastSentWatchMessage.value = msg
+                    _watchSendError.value = null
+                }
+            }.onFailure { error ->
+                _watchSendError.value = error.message ?: "Failed to send message to watch"
+                if (_isNavigating.value) {
+                    service.startAutoReconnect {
+                        onWatchReconnected()
+                    }
                 }
             }
-        }
     }
 
     internal suspend fun onWatchReconnected() {
         if (!_isNavigating.value) return
         _watchSendError.value = null
         val progress = _navigationProgress.value
-        val messageToSend = when {
-            progress == null -> _lastSentWatchMessage.value
-            progress.isArrived -> WatchNavMessage.arrival(destinationName)
-            else -> WatchNavMessage.fromNavStep(
-                progress.currentStep,
-                progress.remainingDistanceToNextTurnMeters
-            )
-        }
+        val messageToSend =
+            when {
+                progress == null -> _lastSentWatchMessage.value
+                progress.isArrived -> WatchNavMessage.arrival(destinationName)
+                else ->
+                    WatchNavMessage.fromNavStep(
+                        progress.currentStep,
+                        progress.remainingDistanceToNextTurnMeters
+                    )
+            }
         if (messageToSend != null) {
             val service = wearEngineService ?: return
             val result = service.sendNavMessage(messageToSend)
-            result.onSuccess {
-                if (_isNavigating.value) {
-                    _lastSentWatchMessage.value = messageToSend
-                    _watchSendError.value = null
-                }
-            }.onFailure { error ->
-                if (_isNavigating.value) {
-                    _watchSendError.value = error.message ?: "Failed to send message to watch"
-                    service.startAutoReconnect {
-                        onWatchReconnected()
+            result
+                .onSuccess {
+                    if (_isNavigating.value) {
+                        _lastSentWatchMessage.value = messageToSend
+                        _watchSendError.value = null
+                    }
+                }.onFailure { error ->
+                    if (_isNavigating.value) {
+                        _watchSendError.value = error.message ?: "Failed to send message to watch"
+                        service.startAutoReconnect {
+                            onWatchReconnected()
+                        }
                     }
                 }
-            }
         }
     }
 
@@ -331,13 +344,12 @@ class NavigationSessionManager(
             wearEngineService: WearEngineService? = null,
             directionsService: DirectionsService? = null,
             dispatcher: CoroutineDispatcher = Dispatchers.Main
-        ): NavigationSessionManager {
-            return instance ?: synchronized(this) {
+        ): NavigationSessionManager =
+            instance ?: synchronized(this) {
                 instance ?: NavigationSessionManager(wearEngineService, directionsService, dispatcher).also {
                     instance = it
                 }
             }
-        }
 
         // For unit testing
         fun setInstanceForTesting(manager: NavigationSessionManager?) {

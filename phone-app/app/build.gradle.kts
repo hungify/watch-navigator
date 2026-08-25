@@ -4,35 +4,41 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.spotless)
 }
 
 // Load local.properties if present
-val localProperties = Properties().apply {
-    val localPropertiesFile = rootProject.file("local.properties")
-    if (localPropertiesFile.exists()) {
-        localPropertiesFile.inputStream().use { load(it) }
+val localProperties =
+    Properties().apply {
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use { load(it) }
+        }
     }
-}
 
 // Load keystore.properties if present
-val keystoreProperties = Properties().apply {
-    val keystorePropertiesFile = rootProject.file("keystore.properties")
-    if (keystorePropertiesFile.exists()) {
-        keystorePropertiesFile.inputStream().use { load(it) }
+val keystoreProperties =
+    Properties().apply {
+        val keystorePropertiesFile = rootProject.file("keystore.properties")
+        if (keystorePropertiesFile.exists()) {
+            keystorePropertiesFile.inputStream().use { load(it) }
+        }
     }
-}
 
-val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY")
-    ?: System.getenv("MAPS_API_KEY")
-    ?: ""
+val mapsApiKey: String =
+    localProperties.getProperty("MAPS_API_KEY")
+        ?: System.getenv("MAPS_API_KEY")
+        ?: ""
 
-val navServerUrl: String = localProperties.getProperty("NAV_SERVER_URL")
-    ?: System.getenv("NAV_SERVER_URL")
-    ?: ""
+val navServerUrl: String =
+    localProperties.getProperty("NAV_SERVER_URL")
+        ?: System.getenv("NAV_SERVER_URL")
+        ?: ""
 
-val navServerToken: String = localProperties.getProperty("NAV_SERVER_TOKEN")
-    ?: System.getenv("NAV_SERVER_TOKEN")
-    ?: ""
+val navServerToken: String =
+    localProperties.getProperty("NAV_SERVER_TOKEN")
+        ?: System.getenv("NAV_SERVER_TOKEN")
+        ?: ""
 android {
     namespace = "com.watchnavigator"
     compileSdk = 35
@@ -93,6 +99,18 @@ android {
         viewBinding = true
         buildConfig = true
         compose = true
+    }
+}
+
+spotless {
+    kotlin {
+        target("**/*.kt")
+        targetExclude("**/build/**")
+        ktlint()
+    }
+    kotlinGradle {
+        target("*.gradle.kts")
+        ktlint()
     }
 }
 

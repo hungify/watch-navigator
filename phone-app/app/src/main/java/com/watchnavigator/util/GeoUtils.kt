@@ -9,7 +9,6 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 object GeoUtils {
-
     const val EARTH_RADIUS_METERS = 6371000.0
 
     data class PolylineProjection(
@@ -21,13 +20,17 @@ object GeoUtils {
     /**
      * Calculates the great-circle distance between two coordinates in meters using the Haversine formula.
      */
-    fun distanceBetweenMeters(p1: LatLng, p2: LatLng): Double {
+    fun distanceBetweenMeters(
+        p1: LatLng,
+        p2: LatLng
+    ): Double {
         val dLat = Math.toRadians(p2.latitude - p1.latitude)
         val dLng = Math.toRadians(p2.longitude - p1.longitude)
         val lat1 = Math.toRadians(p1.latitude)
         val lat2 = Math.toRadians(p2.latitude)
 
-        val a = sin(dLat / 2).let { it * it } +
+        val a =
+            sin(dLat / 2).let { it * it } +
                 sin(dLng / 2).let { it * it } * cos(lat1) * cos(lat2)
         val c = 2 * atan2(sqrt(a), sqrt(1.0 - a))
         return EARTH_RADIUS_METERS * c
@@ -48,7 +51,11 @@ object GeoUtils {
     /**
      * Projects a point onto a line segment and clamps the result to the segment boundaries.
      */
-    fun projectPointOnSegment(point: LatLng, segStart: LatLng, segEnd: LatLng): LatLng {
+    fun projectPointOnSegment(
+        point: LatLng,
+        segStart: LatLng,
+        segEnd: LatLng
+    ): LatLng {
         val meanLat = (segStart.latitude + segEnd.latitude) / 2.0
         val cosMeanLat = cos(Math.toRadians(meanLat))
 
@@ -73,7 +80,10 @@ object GeoUtils {
     /**
      * Finds the closest point on a polyline to the given coordinate.
      */
-    fun findClosestPointOnPolyline(point: LatLng, polyline: List<LatLng>): PolylineProjection {
+    fun findClosestPointOnPolyline(
+        point: LatLng,
+        polyline: List<LatLng>
+    ): PolylineProjection {
         if (polyline.isEmpty()) {
             return PolylineProjection(point, 0, 0.0)
         }
@@ -102,7 +112,10 @@ object GeoUtils {
     /**
      * Calculates the remaining distance from the user's projected location along the polyline to its end.
      */
-    fun remainingDistanceAlongPolyline(point: LatLng, polyline: List<LatLng>): Double {
+    fun remainingDistanceAlongPolyline(
+        point: LatLng,
+        polyline: List<LatLng>
+    ): Double {
         if (polyline.isEmpty()) return 0.0
         if (polyline.size == 1) return distanceBetweenMeters(point, polyline[0])
 
@@ -119,19 +132,24 @@ object GeoUtils {
     /**
      * Calculates remaining distance in meters along a NavStep to its end point.
      */
-    fun remainingDistanceAlongStep(point: LatLng, step: NavStep): Int {
-        return if (step.polylinePoints.size >= 2) {
+    fun remainingDistanceAlongStep(
+        point: LatLng,
+        step: NavStep
+    ): Int =
+        if (step.polylinePoints.size >= 2) {
             remainingDistanceAlongPolyline(point, step.polylinePoints).roundToInt()
         } else {
             distanceBetweenMeters(point, step.endLocation).roundToInt()
         }
-    }
 
     /**
      * Calculates the shortest perpendicular / cross-track distance in meters from a point to a step's polyline.
      */
-    fun distanceToStepPolyline(point: LatLng, step: NavStep): Double {
-        return when {
+    fun distanceToStepPolyline(
+        point: LatLng,
+        step: NavStep
+    ): Double =
+        when {
             step.polylinePoints.size >= 2 -> {
                 findClosestPointOnPolyline(point, step.polylinePoints).distanceToPolylineMeters
             }
@@ -143,5 +161,4 @@ object GeoUtils {
                 distanceBetweenMeters(point, proj)
             }
         }
-    }
 }

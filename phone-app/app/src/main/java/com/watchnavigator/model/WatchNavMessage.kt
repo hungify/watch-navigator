@@ -45,17 +45,19 @@ data class WatchNavMessage(
                 val turn = json.getString("turn")
                 if (turn.isBlank()) return null
 
-                val distance = when {
-                    json.has("distanceMeters") -> json.getInt("distanceMeters")
-                    json.has("distance_m") -> json.getInt("distance_m")
-                    else -> 0
-                }
+                val distance =
+                    when {
+                        json.has("distanceMeters") -> json.getInt("distanceMeters")
+                        json.has("distance_m") -> json.getInt("distance_m")
+                        else -> 0
+                    }
 
-                val street = when {
-                    json.has("street") -> json.optString("street", "")
-                    json.has("streetName") -> json.optString("streetName", "")
-                    else -> ""
-                }
+                val street =
+                    when {
+                        json.has("street") -> json.optString("street", "")
+                        json.has("streetName") -> json.optString("streetName", "")
+                        else -> ""
+                    }
 
                 WatchNavMessage(
                     turn = turn,
@@ -67,28 +69,28 @@ data class WatchNavMessage(
             }
         }
 
-        fun fromNavStep(step: NavStep, remainingDistanceMeters: Int = step.distanceMeters): WatchNavMessage {
-            return WatchNavMessage(
+        fun fromNavStep(
+            step: NavStep,
+            remainingDistanceMeters: Int = step.distanceMeters
+        ): WatchNavMessage =
+            WatchNavMessage(
                 turn = step.maneuver.watchValue,
                 distanceMeters = remainingDistanceMeters,
                 street = step.streetName
             )
-        }
 
-        fun arrival(destinationName: String = ""): WatchNavMessage {
-            return WatchNavMessage(
+        fun arrival(destinationName: String = ""): WatchNavMessage =
+            WatchNavMessage(
                 turn = ManeuverType.ARRIVE.watchValue,
                 distanceMeters = 0,
                 street = destinationName
             )
-        }
 
-        fun stop(): WatchNavMessage {
-            return WatchNavMessage(
+        fun stop(): WatchNavMessage =
+            WatchNavMessage(
                 turn = TERMINAL_TURN,
                 distanceMeters = 0,
                 street = ""
             )
-        }
     }
 }

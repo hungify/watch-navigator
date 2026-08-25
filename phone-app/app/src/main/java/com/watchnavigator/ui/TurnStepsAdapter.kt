@@ -5,7 +5,6 @@ import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.annotation.DrawableRes
-import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -16,11 +15,13 @@ import com.watchnavigator.model.NavStep
 import com.watchnavigator.util.DistanceFormatter
 
 class TurnStepsAdapter : ListAdapter<NavStep, TurnStepsAdapter.ViewHolder>(DiffCallback) {
-
     private var activeStepIndex: Int = -1
     private var activeStepRemainingDistance: Int? = null
 
-    fun setActiveStep(index: Int, remainingDistanceMeters: Int? = null) {
+    fun setActiveStep(
+        index: Int,
+        remainingDistanceMeters: Int? = null
+    ) {
         val prevIndex = activeStepIndex
         activeStepIndex = index
         activeStepRemainingDistance = remainingDistanceMeters
@@ -42,32 +43,43 @@ class TurnStepsAdapter : ListAdapter<NavStep, TurnStepsAdapter.ViewHolder>(DiffC
         }
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        val binding = ItemNavStepBinding.inflate(
-            LayoutInflater.from(parent.context),
-            parent,
-            false
-        )
+    override fun onCreateViewHolder(
+        parent: ViewGroup,
+        viewType: Int
+    ): ViewHolder {
+        val binding =
+            ItemNavStepBinding.inflate(
+                LayoutInflater.from(parent.context),
+                parent,
+                false
+            )
         return ViewHolder(binding)
     }
 
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+    override fun onBindViewHolder(
+        holder: ViewHolder,
+        position: Int
+    ) {
         holder.bind(getItem(position), position == activeStepIndex, activeStepRemainingDistance)
     }
 
     inner class ViewHolder(
         private val binding: ItemNavStepBinding
     ) : RecyclerView.ViewHolder(binding.root) {
-
-        fun bind(step: NavStep, isActive: Boolean, activeDistance: Int?) {
+        fun bind(
+            step: NavStep,
+            isActive: Boolean,
+            activeDistance: Int?
+        ) {
             binding.tvStreetName.text = step.streetName.ifBlank { step.instruction }
             binding.tvInstruction.text = step.instruction
 
-            val displayDistance = if (isActive && activeDistance != null) {
-                activeDistance
-            } else {
-                step.distanceMeters
-            }
+            val displayDistance =
+                if (isActive && activeDistance != null) {
+                    activeDistance
+                } else {
+                    step.distanceMeters
+                }
             binding.tvDistance.text = DistanceFormatter.formatDistance(displayDistance)
             binding.ivManeuver.setImageResource(getManeuverIcon(step.maneuver))
 
@@ -85,8 +97,8 @@ class TurnStepsAdapter : ListAdapter<NavStep, TurnStepsAdapter.ViewHolder>(DiffC
         }
 
         @DrawableRes
-        private fun getManeuverIcon(maneuver: ManeuverType): Int {
-            return when (maneuver) {
+        private fun getManeuverIcon(maneuver: ManeuverType): Int =
+            when (maneuver) {
                 ManeuverType.TURN_LEFT -> R.drawable.ic_maneuver_turn_left
                 ManeuverType.TURN_RIGHT -> R.drawable.ic_maneuver_turn_right
                 ManeuverType.TURN_SLIGHT_LEFT, ManeuverType.RAMP_LEFT, ManeuverType.FORK_LEFT -> R.drawable.ic_maneuver_slight_left
@@ -99,18 +111,20 @@ class TurnStepsAdapter : ListAdapter<NavStep, TurnStepsAdapter.ViewHolder>(DiffC
                 ManeuverType.ARRIVE -> R.drawable.ic_maneuver_arrive
                 ManeuverType.STRAIGHT, ManeuverType.MERGE, ManeuverType.UNKNOWN -> R.drawable.ic_maneuver_straight
             }
-        }
     }
 
     private object DiffCallback : DiffUtil.ItemCallback<NavStep>() {
-        override fun areItemsTheSame(oldItem: NavStep, newItem: NavStep): Boolean {
-            return oldItem.startLocation == newItem.startLocation &&
-                    oldItem.instruction == newItem.instruction &&
-                    oldItem.distanceMeters == newItem.distanceMeters
-        }
+        override fun areItemsTheSame(
+            oldItem: NavStep,
+            newItem: NavStep
+        ): Boolean =
+            oldItem.startLocation == newItem.startLocation &&
+                oldItem.instruction == newItem.instruction &&
+                oldItem.distanceMeters == newItem.distanceMeters
 
-        override fun areContentsTheSame(oldItem: NavStep, newItem: NavStep): Boolean {
-            return oldItem == newItem
-        }
+        override fun areContentsTheSame(
+            oldItem: NavStep,
+            newItem: NavStep
+        ): Boolean = oldItem == newItem
     }
 }

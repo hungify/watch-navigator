@@ -34,7 +34,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class NavigationForegroundService : Service() {
-
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
@@ -52,19 +51,24 @@ class NavigationForegroundService : Service() {
 
         createNotificationChannel()
 
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                for (location in result.locations) {
-                    val latLng = LatLng(location.latitude, location.longitude)
-                    sessionManager.onLocationUpdate(latLng)
+        locationCallback =
+            object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    for (location in result.locations) {
+                        val latLng = LatLng(location.latitude, location.longitude)
+                        sessionManager.onLocationUpdate(latLng)
+                    }
                 }
             }
-        }
 
         observeNavigationProgress()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int
+    ): Int {
         when (intent?.action) {
             ACTION_STOP_NAVIGATION -> {
                 stopNavigationService()
@@ -93,11 +97,12 @@ class NavigationForegroundService : Service() {
             return
         }
         val initialNotification = buildNotification(sessionManager.navigationProgress.value)
-        val foregroundServiceType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-        } else {
-            0
-        }
+        val foregroundServiceType =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            } else {
+                0
+            }
 
         try {
             ServiceCompat.startForeground(
@@ -145,14 +150,15 @@ class NavigationForegroundService : Service() {
 
     private fun observeNavigationProgress() {
         progressCollectorJob?.cancel()
-        progressCollectorJob = serviceScope.launch {
-            sessionManager.navigationProgress.collect { progress ->
-                if (isTracking) {
-                    val updatedNotification = buildNotification(progress)
-                    notificationManager.notify(NOTIFICATION_ID, updatedNotification)
+        progressCollectorJob =
+            serviceScope.launch {
+                sessionManager.navigationProgress.collect { progress ->
+                    if (isTracking) {
+                        val updatedNotification = buildNotification(progress)
+                        notificationManager.notify(NOTIFICATION_ID, updatedNotification)
+                    }
                 }
             }
-        }
 
         serviceScope.launch {
             sessionManager.isRecalculating.collect { isRecalculating ->
@@ -185,38 +191,44 @@ class NavigationForegroundService : Service() {
         val destAddress = sessionManager.activeRoute.value?.destinationAddress ?: getString(R.string.title_destination)
 
         val title = getString(R.string.notification_navigating_to, destAddress)
-        val contentText = when {
-            sessionManager.isRecalculating.value -> getString(R.string.notification_recalculating)
-            progress == null -> getString(R.string.notification_starting)
-            progress.isArrived -> getString(R.string.notification_arrived)
-            else -> {
-                val distStr = DistanceFormatter.formatDistance(progress.remainingDistanceToNextTurnMeters)
-                val instruction = progress.currentStep.instruction
-                getString(R.string.notification_turn_instruction, distStr, instruction)
+        val contentText =
+            when {
+                sessionManager.isRecalculating.value -> getString(R.string.notification_recalculating)
+                progress == null -> getString(R.string.notification_starting)
+                progress.isArrived -> getString(R.string.notification_arrived)
+                else -> {
+                    val distStr = DistanceFormatter.formatDistance(progress.remainingDistanceToNextTurnMeters)
+                    val instruction = progress.currentStep.instruction
+                    getString(R.string.notification_turn_instruction, distStr, instruction)
+                }
             }
-        }
 
-        val openAppIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val openAppPendingIntent = PendingIntent.getActivity(
-            this,
-            0,
-            openAppIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        val openAppIntent =
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+        val openAppPendingIntent =
+            PendingIntent.getActivity(
+                this,
+                0,
+                openAppIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
 
-        val stopIntent = Intent(this, NavigationForegroundService::class.java).apply {
-            action = ACTION_STOP_NAVIGATION
-        }
-        val stopPendingIntent = PendingIntent.getService(
-            this,
-            1,
-            stopIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        val stopIntent =
+            Intent(this, NavigationForegroundService::class.java).apply {
+                action = ACTION_STOP_NAVIGATION
+            }
+        val stopPendingIntent =
+            PendingIntent.getService(
+                this,
+                1,
+                stopIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
 
-        return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+        return NotificationCompat
+            .Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
@@ -225,8 +237,7 @@ class NavigationForegroundService : Service() {
                 R.drawable.ic_launcher_foreground,
                 getString(R.string.notification_action_stop),
                 stopPendingIntent
-            )
-            .setOngoing(true)
+            ).setOngoing(true)
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
@@ -235,14 +246,15 @@ class NavigationForegroundService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = getString(R.string.notification_channel_description)
-                setShowBadge(false)
-            }
+            val channel =
+                NotificationChannel(
+                    NOTIFICATION_CHANNEL_ID,
+                    getString(R.string.notification_channel_name),
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = getString(R.string.notification_channel_description)
+                    setShowBadge(false)
+                }
             notificationManager.createNotificationChannel(channel)
         }
     }
@@ -262,6 +274,7 @@ class NavigationForegroundService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
     companion object {
         private const val TAG = "NavForegroundService"
         const val NOTIFICATION_CHANNEL_ID = "watch_navigator_navigation_channel"
@@ -272,9 +285,10 @@ class NavigationForegroundService : Service() {
 
         fun start(context: Context) {
             try {
-                val intent = Intent(context, NavigationForegroundService::class.java).apply {
-                    action = ACTION_START_NAVIGATION
-                }
+                val intent =
+                    Intent(context, NavigationForegroundService::class.java).apply {
+                        action = ACTION_START_NAVIGATION
+                    }
                 ContextCompat.startForegroundService(context, intent)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start foreground service", e)
@@ -283,9 +297,10 @@ class NavigationForegroundService : Service() {
 
         fun stop(context: Context) {
             try {
-                val intent = Intent(context, NavigationForegroundService::class.java).apply {
-                    action = ACTION_STOP_NAVIGATION
-                }
+                val intent =
+                    Intent(context, NavigationForegroundService::class.java).apply {
+                        action = ACTION_STOP_NAVIGATION
+                    }
                 context.startService(intent)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to stop foreground service", e)

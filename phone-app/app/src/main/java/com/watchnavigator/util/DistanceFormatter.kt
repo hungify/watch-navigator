@@ -3,15 +3,13 @@ package com.watchnavigator.util
 import java.util.Locale
 
 object DistanceFormatter {
-
-    fun formatDistance(meters: Int): String {
-        return if (meters < 1000) {
-            "${meters} m"
+    fun formatDistance(meters: Int): String =
+        if (meters < 1000) {
+            "$meters m"
         } else {
             val km = meters / 1000.0
             String.format(Locale.US, "%.1f km", km)
         }
-    }
 
     fun formatDuration(seconds: Int): String {
         val totalMinutes = (seconds + 30) / 60

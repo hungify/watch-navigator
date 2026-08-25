@@ -20,11 +20,12 @@ class SettingsViewModelTest {
 
     @Test
     fun preferences_initializesFromRepository() {
-        fakeRepository.stored = UserPreferences(
-            defaultTravelMode = TravelMode.WALKING,
-            drivingVibrationThresholdMeters = 200,
-            walkingVibrationThresholdMeters = 40
-        )
+        fakeRepository.stored =
+            UserPreferences(
+                defaultTravelMode = TravelMode.WALKING,
+                drivingVibrationThresholdMeters = 200,
+                walkingVibrationThresholdMeters = 40
+            )
         val vm = SettingsViewModel(fakeRepository)
 
         assertThat(vm.preferences.value.defaultTravelMode).isEqualTo(TravelMode.WALKING)
