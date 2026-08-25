@@ -2,6 +2,9 @@
         watch-build watch-dev watch-test watch-lint watch-format watch-validate watch-clean \
         server-dev server-test server-deploy test build lint format clean
 
+
+# Resolve ADB binary via check-device.sh or fallback to adb
+ADB ?= $(shell bash scripts/check-device.sh --print-adb-path 2>/dev/null || echo adb)
 # Default target: show help
 help:
 	@echo "======================================================================"
@@ -41,65 +44,52 @@ help:
 
 # --- Phone App Targets ---
 device:
-	@echo "Checking ADB connected devices..."
-	@adb devices -l
-	@if [ -z "$$(adb devices | grep -v 'List of devices' | grep -v '^$$')" ]; then \
-		echo ""; \
-		echo "⚠️  No device detected! Please check:"; \
-		echo "  1. USB cable is securely connected (use File Transfer/MTP mode)."; \
-		echo "  2. Developer Options > USB Debugging is turned ON on phone."; \
-		echo "  3. Accept the 'Allow USB debugging?' popup prompt on phone screen."; \
-	elif adb devices | grep -q "unauthorized"; then \
-		echo ""; \
-		echo "⚠️  Device detected but UNAUTHORIZED! Please check:"; \
-		echo "  1. Unlock your phone screen."; \
-		echo "  2. Accept the 'Allow USB debugging?' popup prompt."; \
-	else \
-		echo ""; \
-		echo "✅ Device is connected and ready!"; \
-	fi
+	@bash scripts/check-device.sh || true
 
 phone-build:
 	@echo "Building Android debug APK..."
 	@cd phone-app && ./gradlew assembleDebug
-	@echo "✅ APK ready at: phone-app/app/build/outputs/apk/debug/app-debug.apk"
+	@echo "APK ready at: phone-app/app/build/outputs/apk/debug/app-debug.apk"
 
 phone-install:
+	@echo "Checking device pre-flight..."
+	@bash scripts/check-device.sh
 	@echo "Installing Debug APK onto device..."
 	@if [ -f "phone-app/app/build/outputs/apk/debug/app-debug.apk" ]; then \
-		adb install -r phone-app/app/build/outputs/apk/debug/app-debug.apk || (cd phone-app && ./gradlew installDebug); \
+		$(ADB) install -r phone-app/app/build/outputs/apk/debug/app-debug.apk || (cd phone-app && ./gradlew installDebug); \
 	else \
 		cd phone-app && ./gradlew installDebug; \
 	fi
-	@echo "✅ Installed successfully!"
+	@echo "Installed successfully!"
 
 phone-run: phone-install
 	@echo "Launching WatchNavigator on device..."
-	@adb shell am start -n com.watchnavigator/.MainActivity
-	@echo "🚀 App launched on phone!"
+	@$(ADB) shell am start -n com.watchnavigator/.MainActivity
+	@echo "App launched on phone!"
 
 phone-test:
 	@echo "Running Phone App unit tests..."
 	@cd phone-app && ./gradlew test
-
+	@echo "Running Developer Tools tests..."
+	@bash scripts/test-check-device.sh
 phone-lint:
 	@echo "Running Phone App Android Lint..."
 	@cd phone-app && ./gradlew lintDebug
 
 phone-logs:
 	@echo "Streaming Logcat (Ctrl+C to stop)..."
-	@adb logcat -v time -s WatchNavigator:V WearEngine:V NavigationSessionManager:V HuaweiWearEngineService:V NavForegroundService:V NavigationService:V AndroidRuntime:E
+	@$(ADB) logcat -v time -s WatchNavigator:V WearEngine:V NavigationSessionManager:V HuaweiWearEngineService:V NavForegroundService:V NavigationService:V AndroidRuntime:E
 
 phone-clean:
 	@echo "Cleaning Phone App Gradle outputs..."
 	@cd phone-app && ./gradlew clean
-	@echo "✅ Phone clean complete."
+	@echo "Phone clean complete."
 
 # --- Watch App Targets ---
 watch-build:
 	@echo "Building Watch App TypeScript bundle..."
 	@cd watch-app && pnpm install && pnpm build
-	@echo "✅ Watch JS bundle ready in watch-app/entry/src/main/js/default/"
+	@echo "Watch JS bundle ready in watch-app/entry/src/main/js/default/"
 
 watch-dev:
 	@echo "Starting Watch App TypeScript compiler in watch mode..."
@@ -129,7 +119,7 @@ watch-clean:
 		watch-app/entry/src/main/js/default/haptics.js \
 		watch-app/entry/src/main/js/default/app.js \
 		watch-app/entry/src/main/js/default/pages/index/index.js
-	@echo "✅ Watch clean complete."
+	@echo "Watch clean complete."
 
 # --- Directions Proxy Server Targets ---
 server-dev:
@@ -146,16 +136,16 @@ server-deploy:
 
 # --- Monorepo / Combined Targets ---
 build: phone-build watch-build
-	@echo "✅ Both phone APK and watch bundle built successfully."
+	@echo "Both phone APK and watch bundle built successfully."
 
 test: phone-test watch-test server-test
-	@echo "✅ All tests passed across all subprojects (Phone, Watch, Server)."
+	@echo "All tests passed across all subprojects (Phone, Watch, Server)."
 
 lint: phone-lint watch-lint
-	@echo "✅ Lint checks passed across Phone and Watch modules."
+	@echo "Lint checks passed across Phone and Watch modules."
 
 format: watch-format
-	@echo "✅ Code formatting applied."
+	@echo "Code formatting applied."
 
 clean: phone-clean watch-clean
-	@echo "✅ All build outputs and caches cleaned."
+	@echo "All build outputs and caches cleaned."
