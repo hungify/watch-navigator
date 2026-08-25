@@ -5,7 +5,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class ThemeTest {
-
     @Test
     fun lightColorScheme_definesValidPrimaryAndSurfaceColors() {
         assertThat(LightColorScheme.primary).isEqualTo(Color(0xFF006494))

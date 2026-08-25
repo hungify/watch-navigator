@@ -441,317 +441,78 @@ class MainViewModelTest {
                     )
                 )
         )
-        fakeDirectionsService.routeToReturn = sampleRoute
-
-        viewModel.selectSuggestion(suggestion)
-        advanceUntilIdle()
-
-        val routeState = viewModel.routeState.value
-        assertThat(routeState).isInstanceOf(RouteUiState.Success::class.java)
-        val routeSuccess = routeState as RouteUiState.Success
-        assertThat(routeSuccess.route.totalDistanceMeters).isEqualTo(5000)
-    }
 
     @Test
-    fun travelModeChange_triggersRouteRecalculation() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
-        val destinationLocation = LatLng(21.0175, 105.7842)
-        fakePlacesService.placeLocationToReturn = destinationLocation
-        fakeDirectionsService.routeToReturn = createSampleRoute(destinationLocation)
+    fun requestWatchPermission_delegatesToWearEngineServiceRequestPermission() =
+        runTest {
+            val initialCount = fakeWearEngineService.requestPermissionCount
+            viewModel.requestWatchPermission()
+            advanceUntilIdle()
 
-        viewModel.selectSuggestion(suggestion)
-        advanceUntilIdle()
-
-        viewModel.setTravelMode(TravelMode.WALKING)
-        advanceUntilIdle()
-
-        assertThat(fakeDirectionsService.lastRequestedMode).isEqualTo(TravelMode.WALKING)
-    }
+            assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialCount + 1)
+        }
 
     @Test
-    fun routeCalculationError_updatesRouteStateToError() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val suggestion = PlaceSuggestion("p1", "Unknown Place", "Hanoi", "Unknown Place, Hanoi")
-        val destinationLocation = LatLng(21.0175, 105.7842)
-        fakePlacesService.placeLocationToReturn = destinationLocation
-        fakeDirectionsService.exceptionToThrow = RuntimeException("Route not found")
+    fun requestWatchPermission_clearsPreviousWatchSendError() =
+        runTest {
+            fakeWearEngineService.sendResultToReturn = Result.failure(RuntimeException("Transmission failed"))
+            viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+            val dest = LatLng(21.0175, 105.7842)
+            fakeDirectionsService.routeToReturn = createSampleRoute(dest)
+            fakePlacesService.placeLocationToReturn = dest
 
-        viewModel.selectSuggestion(suggestion)
-        advanceUntilIdle()
+            viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+            advanceUntilIdle()
 
-        val routeState = viewModel.routeState.value
-        assertThat(routeState).isInstanceOf(RouteUiState.Error::class.java)
-        assertThat((routeState as RouteUiState.Error).message).contains("Route not found")
-    }
+            viewModel.startNavigation()
+            advanceUntilIdle()
 
-    @Test
-    fun selectSuggestion_resetsDestinationLatLngImmediately() = runTest {
-        val suggestion = PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi")
-        viewModel.selectSuggestion(suggestion)
+            assertThat(viewModel.watchSendError.value).isEqualTo("Transmission failed")
 
-        assertThat(viewModel.selectedDestination.value).isEqualTo(suggestion)
-        assertThat(viewModel.destinationLatLng.value).isNull()
-        assertThat(viewModel.suggestionsState.value).isEqualTo(SuggestionsUiState.Idle)
-    }
+            viewModel.requestWatchPermission()
+            advanceUntilIdle()
+
+            assertThat(viewModel.watchSendError.value).isNull()
+        }
 
     @Test
-    fun watchConnectionState_reflectsWearEngineServiceState() = runTest {
-        fakeWearEngineService.connectionStateToReturn = WatchConnectionState.Connected("HUAWEI WATCH GT 5", "GT5-PRO")
-        viewModel.checkWatchConnection()
-        advanceUntilIdle()
+    fun requestWatchPermission_coalescesConcurrentCalls() =
+        runTest {
+            val initialCount = fakeWearEngineService.requestPermissionCount
+            viewModel.requestWatchPermission()
+            viewModel.requestWatchPermission()
+            advanceUntilIdle()
 
-        val state = viewModel.watchConnectionState.value
-        assertThat(state).isInstanceOf(WatchConnectionState.Connected::class.java)
-        assertThat((state as WatchConnectionState.Connected).deviceName).isEqualTo("HUAWEI WATCH GT 5")
-    }
-
-    @Test
-    fun startNavigation_dispatchesFirstTurnMessageToWatch() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        val route = createSampleRoute(dest)
-        fakeDirectionsService.routeToReturn = route
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.startNavigation()
-        advanceUntilIdle()
-
-        assertThat(viewModel.isNavigating.value).isTrue()
-        assertThat(viewModel.currentStepIndex.value).isEqualTo(0)
-        assertThat(fakeWearEngineService.sentMessages).hasSize(1)
-        val sent = fakeWearEngineService.sentMessages[0]
-        assertThat(sent.turn).isEqualTo("straight")
-        assertThat(sent.distanceMeters).isEqualTo(5000)
-        assertThat(sent.street).isEqualTo("Nguyen Trai")
-        assertThat(viewModel.lastSentWatchMessage.value).isEqualTo(sent)
-    }
+            assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialCount + 1)
+        }
 
     @Test
-    fun updateNavigationStep_sendsUpdatedMessageToWatch() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        val route = NavRoute(
-            origin = LatLng(21.0285, 105.8542),
-            destination = dest,
-            destinationAddress = "Landmark 72, Hanoi",
-            totalDistanceMeters = 5000,
-            totalDurationSeconds = 900,
-            travelMode = TravelMode.DRIVING,
-            overviewPolyline = listOf(LatLng(21.0285, 105.8542), dest),
-            steps = listOf(
-                NavStep("Head straight", "Nguyen Trai", ManeuverType.STRAIGHT, 2000, 300, LatLng(21.0, 105.8), LatLng(21.01, 105.8), emptyList()),
-                NavStep("Turn left onto Tran Phu", "Tran Phu", ManeuverType.TURN_LEFT, 3000, 600, LatLng(21.01, 105.8), dest, emptyList())
-            )
-        )
-        fakeDirectionsService.routeToReturn = route
-        fakePlacesService.placeLocationToReturn = dest
+    fun connectOrRequestWatchPermission_whenUnauthorized_callsRequestPermission() =
+        runTest {
+            fakeWearEngineService.setConnectionState(WatchConnectionState.Unauthorized("Permission required"))
+            val initialReqCount = fakeWearEngineService.requestPermissionCount
+            val initialCheckCount = fakeWearEngineService.checkConnectionCount
 
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
+            viewModel.connectOrRequestWatchPermission()
+            advanceUntilIdle()
 
-        viewModel.startNavigation()
-        advanceUntilIdle()
-
-        // Advance to step 1 with 150m remaining
-        viewModel.updateNavigationStep(1, remainingDistanceMeters = 150)
-        advanceUntilIdle()
-
-        assertThat(viewModel.currentStepIndex.value).isEqualTo(1)
-        assertThat(fakeWearEngineService.sentMessages).hasSize(2)
-        val secondMsg = fakeWearEngineService.sentMessages[1]
-        assertThat(secondMsg.turn).isEqualTo("left")
-        assertThat(secondMsg.distanceMeters).isEqualTo(150)
-        assertThat(secondMsg.street).isEqualTo("Tran Phu")
-    }
+            assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialReqCount + 1)
+            assertThat(fakeWearEngineService.checkConnectionCount).isEqualTo(initialCheckCount)
+        }
 
     @Test
-    fun stopNavigation_resetsNavigatingStateAndSendsStopMessage() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
+    fun connectOrRequestWatchPermission_whenDisconnected_callsCheckConnection() =
+        runTest {
+            fakeWearEngineService.setConnectionState(WatchConnectionState.Disconnected())
+            val initialReqCount = fakeWearEngineService.requestPermissionCount
+            val initialCheckCount = fakeWearEngineService.checkConnectionCount
 
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
+            viewModel.connectOrRequestWatchPermission()
+            advanceUntilIdle()
 
-        viewModel.startNavigation()
-        assertThat(viewModel.isNavigating.value).isTrue()
-
-        viewModel.stopNavigation()
-        advanceUntilIdle()
-
-        assertThat(viewModel.isNavigating.value).isFalse()
-        assertThat(viewModel.currentStepIndex.value).isEqualTo(0)
-        val lastMsg = fakeWearEngineService.sentMessages.lastOrNull()
-        assertThat(lastMsg).isNotNull()
-        assertThat(lastMsg?.turn).isEqualTo(WatchNavMessage.TERMINAL_TURN)
-    }
-
-    @Test
-    fun sendWatchMessage_whenSendFails_updatesWatchSendError() = runTest {
-        fakeWearEngineService.sendResultToReturn = Result.failure(RuntimeException("Transmission failed"))
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.startNavigation()
-        advanceUntilIdle()
-
-        assertThat(viewModel.watchSendError.value).isEqualTo("Transmission failed")
-        assertThat(viewModel.lastSentWatchMessage.value).isNull()
-    }
-
-
-    @Test
-    fun checkWatchConnection_coalescesConcurrentChecks() = runTest {
-        val initialCount = fakeWearEngineService.checkConnectionCount
-        viewModel.checkWatchConnection()
-        viewModel.checkWatchConnection()
-        advanceUntilIdle()
-
-        assertThat(fakeWearEngineService.checkConnectionCount).isEqualTo(initialCount + 1)
-    }
-
-    @Test
-    fun checkWatchConnection_clearsPreviousWatchSendError() = runTest {
-        fakeWearEngineService.sendResultToReturn = Result.failure(RuntimeException("Transmission failed"))
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.startNavigation()
-        advanceUntilIdle()
-
-        assertThat(viewModel.watchSendError.value).isEqualTo("Transmission failed")
-
-        // Now user taps retry / check connection
-        viewModel.checkWatchConnection()
-        advanceUntilIdle()
-
-        assertThat(viewModel.watchSendError.value).isNull()
-    }
-
-    @Test
-    fun requestWatchPermission_delegatesToWearEngineServiceRequestPermission() = runTest {
-        val initialCount = fakeWearEngineService.requestPermissionCount
-        viewModel.requestWatchPermission()
-        advanceUntilIdle()
-
-        assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialCount + 1)
-    }
-
-    @Test
-    fun requestWatchPermission_clearsPreviousWatchSendError() = runTest {
-        fakeWearEngineService.sendResultToReturn = Result.failure(RuntimeException("Transmission failed"))
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.startNavigation()
-        advanceUntilIdle()
-
-        assertThat(viewModel.watchSendError.value).isEqualTo("Transmission failed")
-
-        viewModel.requestWatchPermission()
-        advanceUntilIdle()
-
-        assertThat(viewModel.watchSendError.value).isNull()
-    }
-
-    @Test
-    fun requestWatchPermission_coalescesConcurrentCalls() = runTest {
-        val initialCount = fakeWearEngineService.requestPermissionCount
-        viewModel.requestWatchPermission()
-        viewModel.requestWatchPermission()
-        advanceUntilIdle()
-
-        assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialCount + 1)
-    }
-
-    @Test
-    fun connectOrRequestWatchPermission_whenUnauthorized_callsRequestPermission() = runTest {
-        fakeWearEngineService._connectionState.value = WatchConnectionState.Unauthorized("Permission required")
-        val initialReqCount = fakeWearEngineService.requestPermissionCount
-        val initialCheckCount = fakeWearEngineService.checkConnectionCount
-
-        viewModel.connectOrRequestWatchPermission()
-        advanceUntilIdle()
-
-        assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialReqCount + 1)
-        assertThat(fakeWearEngineService.checkConnectionCount).isEqualTo(initialCheckCount)
-    }
-
-    @Test
-    fun connectOrRequestWatchPermission_whenDisconnected_callsCheckConnection() = runTest {
-        fakeWearEngineService._connectionState.value = WatchConnectionState.Disconnected()
-        val initialReqCount = fakeWearEngineService.requestPermissionCount
-        val initialCheckCount = fakeWearEngineService.checkConnectionCount
-
-        viewModel.connectOrRequestWatchPermission()
-        advanceUntilIdle()
-
-        assertThat(fakeWearEngineService.checkConnectionCount).isEqualTo(initialCheckCount + 1)
-        assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialReqCount)
-    }
-    @Test
-    fun sendArrivalToWatch_sendsArrivalPayload() = runTest {
-        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
-        val dest = LatLng(21.0175, 105.7842)
-        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
-        fakePlacesService.placeLocationToReturn = dest
-
-        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
-        advanceUntilIdle()
-
-        viewModel.sendArrivalToWatch()
-        advanceUntilIdle()
-
-        val lastMsg = fakeWearEngineService.sentMessages.lastOrNull()
-        assertThat(lastMsg).isNotNull()
-        assertThat(lastMsg?.turn).isEqualTo("arrive")
-        assertThat(lastMsg?.distanceMeters).isEqualTo(0)
-        assertThat(lastMsg?.street).isEqualTo("Landmark 72")
-    }
-
-    private fun createSampleRoute(destinationLocation: LatLng): NavRoute {
-        return NavRoute(
-            origin = LatLng(21.0285, 105.8542),
-            destination = destinationLocation,
-            destinationAddress = "Landmark 72, Hanoi",
-            totalDistanceMeters = 5000,
-            totalDurationSeconds = 900,
-            travelMode = TravelMode.DRIVING,
-            overviewPolyline = listOf(LatLng(21.0285, 105.8542), destinationLocation),
-            steps = listOf(
-                NavStep(
-                    instruction = "Head west",
-                    streetName = "Nguyen Trai",
-                    maneuver = ManeuverType.STRAIGHT,
-                    distanceMeters = 5000,
-                    durationSeconds = 900,
-                    startLocation = LatLng(21.0285, 105.8542),
-                    endLocation = destinationLocation,
-                    polylinePoints = emptyList()
-                )
-            )
-        )
-    }
+            assertThat(fakeWearEngineService.checkConnectionCount).isEqualTo(initialCheckCount + 1)
+            assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialReqCount)
+        }
 
     private class FakePlacesSearchService : PlacesSearchService {
         var suggestionsToReturn: List<PlaceSuggestion> = emptyList()
@@ -881,6 +642,11 @@ class MainViewModelTest {
 
         private val _isReconnecting = MutableStateFlow(false)
         override val isReconnecting: StateFlow<Boolean> = _isReconnecting.asStateFlow()
+
+        fun setConnectionState(state: WatchConnectionState) {
+            _connectionState.value = state
+            connectionStateToReturn = state
+        }
 
         var permissionsGranted = true
         var connectionStateToReturn: WatchConnectionState = WatchConnectionState.Connected("HUAWEI WATCH GT 5", "GT5-PRO")
