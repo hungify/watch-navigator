@@ -1,6 +1,6 @@
-.PHONY: help device phone-build phone-install phone-run phone-test phone-lint phone-logs phone-clean \
+.PHONY: help device phone-build phone-install phone-run phone-test phone-lint phone-format phone-logs phone-clean \
         watch-build watch-dev watch-test watch-lint watch-format watch-validate watch-clean \
-        server-dev server-test server-deploy test build lint format clean
+        server-dev server-test server-lint server-deploy test build lint format clean
 
 
 # Resolve ADB binary via check-device.sh or fallback to adb
@@ -16,7 +16,8 @@ help:
 	@echo "  make phone-install   - Install Debug APK to connected Android phone"
 	@echo "  make phone-run       - Build, install and launch app on phone"
 	@echo "  make phone-test      - Run Phone App unit tests (JVM)"
-	@echo "  make phone-lint      - Run Android Lint analysis on Phone App"
+	@echo "  make phone-lint      - Run Spotless format check and Android Lint on Phone App"
+	@echo "  make phone-format    - Format Phone App Kotlin code using Spotless (ktlint)"
 	@echo "  make phone-logs      - Stream live Logcat filtered for WatchNavigator"
 	@echo "  make phone-clean     - Clean Phone App Gradle build outputs"
 	@echo ""
@@ -32,12 +33,13 @@ help:
 	@echo "Directions Proxy Server (Cloudflare Workers):"
 	@echo "  make server-dev      - Run local Cloudflare Worker development server"
 	@echo "  make server-test     - Run Server unit tests & typecheck"
+	@echo "  make server-lint     - Run TypeScript typecheck on Directions Proxy Server"
 	@echo "  make server-deploy   - Deploy Directions Proxy Worker to Cloudflare"
 	@echo ""
 	@echo "Monorepo / General:"
 	@echo "  make build           - Build both phone APK and watch JS bundle"
 	@echo "  make test            - Run full test suite across all subprojects"
-	@echo "  make lint            - Run linters across phone and watch modules"
+	@echo "  make lint            - Run linters across Phone, Watch, and Server modules"
 	@echo "  make format          - Format source code across the monorepo"
 	@echo "  make clean           - Clean all build outputs and caches"
 	@echo "======================================================================"
@@ -72,10 +74,15 @@ phone-test:
 	@cd phone-app && ./gradlew test
 	@echo "Running Developer Tools tests..."
 	@bash scripts/test-check-device.sh
+phone-format:
+	@echo "Formatting Phone App code with Spotless (ktlint)..."
+	@cd phone-app && ./gradlew spotlessApply
+
 phone-lint:
+	@echo "Checking Phone App code formatting with Spotless..."
+	@cd phone-app && ./gradlew spotlessCheck
 	@echo "Running Phone App Android Lint..."
 	@cd phone-app && ./gradlew lintDebug
-
 phone-logs:
 	@echo "Streaming Logcat (Ctrl+C to stop)..."
 	@$(ADB) logcat -v time -s WatchNavigator:V WearEngine:V NavigationSessionManager:V HuaweiWearEngineService:V NavForegroundService:V NavigationService:V AndroidRuntime:E
@@ -130,6 +137,10 @@ server-test:
 	@echo "Running Directions Proxy Server tests..."
 	@cd server && pnpm test
 
+server-lint:
+	@echo "Checking Directions Proxy Server types..."
+	@cd server && pnpm run typecheck
+
 server-deploy:
 	@echo "Deploying Directions Proxy Worker to Cloudflare..."
 	@cd server && pnpm run deploy
@@ -141,11 +152,11 @@ build: phone-build watch-build
 test: phone-test watch-test server-test
 	@echo "All tests passed across all subprojects (Phone, Watch, Server)."
 
-lint: phone-lint watch-lint
-	@echo "Lint checks passed across Phone and Watch modules."
+lint: phone-lint watch-lint server-lint
+	@echo "Lint checks passed across Phone, Watch, and Server modules."
 
-format: watch-format
-	@echo "Code formatting applied."
+format: phone-format watch-format
+	@echo "Code formatting applied across monorepo."
 
 clean: phone-clean watch-clean
 	@echo "All build outputs and caches cleaned."

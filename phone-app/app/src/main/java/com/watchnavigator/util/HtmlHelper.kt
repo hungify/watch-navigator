@@ -3,7 +3,6 @@ package com.watchnavigator.util
 import java.util.regex.Pattern
 
 object HtmlHelper {
-
     private val HTML_TAG_PATTERN = Pattern.compile("<[^>]*>")
     private val ONTO_PATTERN = Pattern.compile("(?:onto|vào)\\s+<b>(.*?)</b>", Pattern.CASE_INSENSITIVE)
     private val ON_PATTERN = Pattern.compile("(?:on|trên)\\s+<b>(.*?)</b>", Pattern.CASE_INSENSITIVE)
@@ -16,18 +15,19 @@ object HtmlHelper {
     fun stripHtml(html: String?): String {
         if (html.isNullOrBlank()) return ""
 
-        var text = html
-            .replace("<div[^>]*>".toRegex(RegexOption.IGNORE_CASE), " ")
-            .replace("</div>".toRegex(RegexOption.IGNORE_CASE), " ")
-            .replace("<br\\s*/?>".toRegex(RegexOption.IGNORE_CASE), " ")
-            .replace(HTML_TAG_PATTERN.toRegex(), "")
-            .replace("&amp;", "&")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&quot;", "\"")
-            .replace("&#39;", "'")
-            .replace("&apos;", "'")
-            .replace("&nbsp;", " ")
+        var text =
+            html
+                .replace("<div[^>]*>".toRegex(RegexOption.IGNORE_CASE), " ")
+                .replace("</div>".toRegex(RegexOption.IGNORE_CASE), " ")
+                .replace("<br\\s*/?>".toRegex(RegexOption.IGNORE_CASE), " ")
+                .replace(HTML_TAG_PATTERN.toRegex(), "")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replace("&apos;", "'")
+                .replace("&nbsp;", " ")
 
         return text.replace("\\s+".toRegex(), " ").trim()
     }
@@ -35,7 +35,10 @@ object HtmlHelper {
     /**
      * Extracts the target street name from HTML instruction, e.g. "onto <b>Nguyen Trai</b>" or "on <b>Hang Khay</b>".
      */
-    fun extractStreetName(html: String?, fallbackInstruction: String = ""): String {
+    fun extractStreetName(
+        html: String?,
+        fallbackInstruction: String = ""
+    ): String {
         if (!html.isNullOrBlank()) {
             // 1. Check "onto ..."
             val ontoMatcher = ONTO_PATTERN.matcher(html)
@@ -79,9 +82,26 @@ object HtmlHelper {
 
     private fun isCardinalOrTurnDirection(text: String): Boolean {
         val lower = text.lowercase()
-        return lower in setOf(
-            "north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest",
-            "left", "right", "straight", "trái", "phải", "thẳng", "bắc", "nam", "đông", "tây"
-        )
+        return lower in
+            setOf(
+                "north",
+                "south",
+                "east",
+                "west",
+                "northeast",
+                "northwest",
+                "southeast",
+                "southwest",
+                "left",
+                "right",
+                "straight",
+                "trái",
+                "phải",
+                "thẳng",
+                "bắc",
+                "nam",
+                "đông",
+                "tây"
+            )
     }
 }

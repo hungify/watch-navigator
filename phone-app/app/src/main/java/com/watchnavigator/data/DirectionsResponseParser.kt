@@ -11,22 +11,25 @@ import org.json.JSONException
 import org.json.JSONObject
 
 class DirectionsResponseParser {
-
-    fun parse(jsonString: String, travelMode: TravelMode = TravelMode.DRIVING): Result<NavRoute> {
+    fun parse(
+        jsonString: String,
+        travelMode: TravelMode = TravelMode.DRIVING
+    ): Result<NavRoute> {
         return try {
             val root = JSONObject(jsonString)
             val status = root.optString("status", "UNKNOWN")
 
             if (status != "OK") {
                 val errorMessage = root.optString("error_message", "Directions API returned status: $status")
-                val userFriendlyMessage = when (status) {
-                    "ZERO_RESULTS" -> "No route found between the origin and destination."
-                    "NOT_FOUND" -> "One or more locations could not be found."
-                    "OVER_QUERY_LIMIT" -> "Directions API quota exceeded."
-                    "REQUEST_DENIED" -> "Directions API request was denied: $errorMessage"
-                    "INVALID_REQUEST" -> "Invalid directions request: $errorMessage"
-                    else -> errorMessage
-                }
+                val userFriendlyMessage =
+                    when (status) {
+                        "ZERO_RESULTS" -> "No route found between the origin and destination."
+                        "NOT_FOUND" -> "One or more locations could not be found."
+                        "OVER_QUERY_LIMIT" -> "Directions API quota exceeded."
+                        "REQUEST_DENIED" -> "Directions API request was denied: $errorMessage"
+                        "INVALID_REQUEST" -> "Invalid directions request: $errorMessage"
+                        else -> errorMessage
+                    }
                 return Result.failure(DirectionsApiException(status, userFriendlyMessage))
             }
 
@@ -85,10 +88,24 @@ class DirectionsResponseParser {
                         val maneuver = ManeuverType.fromApiString(rawManeuver, cleanInstruction)
 
                         val sLoc = stepObj.optJSONObject("start_location")
-                        val startLatLng = if (sLoc != null) LatLng(sLoc.optDouble("lat", 0.0), sLoc.optDouble("lng", 0.0)) else LatLng(0.0, 0.0)
+                        val startLatLng =
+                            if (sLoc !=
+                                null
+                            ) {
+                                LatLng(sLoc.optDouble("lat", 0.0), sLoc.optDouble("lng", 0.0))
+                            } else {
+                                LatLng(0.0, 0.0)
+                            }
 
                         val eLoc = stepObj.optJSONObject("end_location")
-                        val endLatLng = if (eLoc != null) LatLng(eLoc.optDouble("lat", 0.0), eLoc.optDouble("lng", 0.0)) else LatLng(0.0, 0.0)
+                        val endLatLng =
+                            if (eLoc !=
+                                null
+                            ) {
+                                LatLng(eLoc.optDouble("lat", 0.0), eLoc.optDouble("lng", 0.0))
+                            } else {
+                                LatLng(0.0, 0.0)
+                            }
 
                         val stepPolyStr = stepObj.optJSONObject("polyline")?.optString("points", "") ?: ""
                         val stepPolyline = PolylineDecoder.decode(stepPolyStr)
@@ -109,16 +126,17 @@ class DirectionsResponseParser {
                 }
             }
 
-            val navRoute = NavRoute(
-                origin = firstStartLocation,
-                destination = lastEndLocation,
-                destinationAddress = destinationAddress,
-                totalDistanceMeters = totalDistance,
-                totalDurationSeconds = totalDuration,
-                travelMode = travelMode,
-                overviewPolyline = overviewPolyline,
-                steps = allSteps
-            )
+            val navRoute =
+                NavRoute(
+                    origin = firstStartLocation,
+                    destination = lastEndLocation,
+                    destinationAddress = destinationAddress,
+                    totalDistanceMeters = totalDistance,
+                    totalDurationSeconds = totalDuration,
+                    travelMode = travelMode,
+                    overviewPolyline = overviewPolyline,
+                    steps = allSteps
+                )
 
             Result.success(navRoute)
         } catch (e: JSONException) {

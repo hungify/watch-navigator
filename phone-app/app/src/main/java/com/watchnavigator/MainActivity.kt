@@ -43,7 +43,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
-
     private lateinit var binding: ActivityMainBinding
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -53,32 +52,35 @@ class MainActivity : AppCompatActivity() {
 
     private val viewModel: MainViewModel by viewModels {
         val placesSearchService = GooglePlacesSearchService(placesClient)
-        val directionsService = GoogleDirectionsService(
-            apiKey = BuildConfig.MAPS_API_KEY,
-            serverUrl = BuildConfig.NAV_SERVER_URL,
-            serverToken = BuildConfig.NAV_SERVER_TOKEN
-        )
+        val directionsService =
+            GoogleDirectionsService(
+                apiKey = BuildConfig.MAPS_API_KEY,
+                serverUrl = BuildConfig.NAV_SERVER_URL,
+                serverToken = BuildConfig.NAV_SERVER_TOKEN
+            )
         val wearEngineService = HuaweiWearEngineService(applicationContext)
         val preferencesRepository = SharedPreferencesRepository(applicationContext)
         MainViewModel.Factory(placesSearchService, directionsService, wearEngineService, preferencesRepository)
     }
 
-    private val permissionsLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
-        val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
-        if (fineLocationGranted || coarseLocationGranted) {
-            fetchDeviceLocation()
+    private val permissionsLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { permissions ->
+            val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+            val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+            if (fineLocationGranted || coarseLocationGranted) {
+                fetchDeviceLocation()
+            }
         }
-    }
 
-    private val settingsLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        viewModel.refreshTravelModeFromPreferences()
-        binding.rgTravelMode.checkTravelMode(viewModel.travelMode.value)
-    }
+    private val settingsLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) {
+            viewModel.refreshTravelModeFromPreferences()
+            binding.rgTravelMode.checkTravelMode(viewModel.travelMode.value)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -109,12 +111,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupAdapters() {
-        suggestionsAdapter = PlaceSuggestionsAdapter { suggestion ->
-            viewModel.selectSuggestion(suggestion)
-            binding.etDestination.setText(suggestion.primaryText)
-            binding.etDestination.setSelection(suggestion.primaryText.length)
-            binding.cardSuggestions.visibility = View.GONE
-        }
+        suggestionsAdapter =
+            PlaceSuggestionsAdapter { suggestion ->
+                viewModel.selectSuggestion(suggestion)
+                binding.etDestination.setText(suggestion.primaryText)
+                binding.etDestination.setSelection(suggestion.primaryText.length)
+                binding.cardSuggestions.visibility = View.GONE
+            }
         binding.rvSuggestions.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = suggestionsAdapter
@@ -213,9 +216,10 @@ class MainActivity : AppCompatActivity() {
                                 binding.cardError.visibility = View.GONE
 
                                 val route = state.route
-                                binding.tvRouteDestination.text = route.destinationAddress.ifBlank {
-                                    viewModel.selectedDestination.value?.primaryText ?: getString(R.string.title_destination)
-                                }
+                                binding.tvRouteDestination.text =
+                                    route.destinationAddress.ifBlank {
+                                        viewModel.selectedDestination.value?.primaryText ?: getString(R.string.title_destination)
+                                    }
                                 binding.tvRouteDuration.text = DistanceFormatter.formatDuration(route.totalDurationSeconds)
                                 binding.tvRouteDistance.text = DistanceFormatter.formatDistance(route.totalDistanceMeters)
                                 binding.cardRouteOverview.visibility = View.VISIBLE
@@ -309,7 +313,10 @@ class MainActivity : AppCompatActivity() {
         return false
     }
 
-    private fun updateWatchStatusUI(state: WatchConnectionState, sendError: String?) {
+    private fun updateWatchStatusUI(
+        state: WatchConnectionState,
+        sendError: String?
+    ) {
         if (sendError != null) {
             binding.tvWatchStatus.text = getString(R.string.watch_status_error, sendError)
             binding.btnConnectWatch.isEnabled = true
@@ -329,11 +336,12 @@ class MainActivity : AppCompatActivity() {
             }
             is WatchConnectionState.Disconnected -> {
                 val reason = state.reason
-                binding.tvWatchStatus.text = if (reason.isNullOrBlank()) {
-                    getString(R.string.watch_status_disconnected)
-                } else {
-                    "${getString(R.string.watch_status_disconnected)} ($reason)"
-                }
+                binding.tvWatchStatus.text =
+                    if (reason.isNullOrBlank()) {
+                        getString(R.string.watch_status_disconnected)
+                    } else {
+                        "${getString(R.string.watch_status_disconnected)} ($reason)"
+                    }
                 binding.btnConnectWatch.isEnabled = true
                 binding.btnConnectWatch.text = getString(R.string.btn_connect_watch)
             }
@@ -353,14 +361,16 @@ class MainActivity : AppCompatActivity() {
     private fun checkPermissionsAndFetchLocation() {
         val permissionsToRequest = mutableListOf<String>()
 
-        val fineLocationGranted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-        val coarseLocationGranted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
+        val fineLocationGranted =
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        val coarseLocationGranted =
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
 
         if (!fineLocationGranted) {
             permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -370,10 +380,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val notificationGranted = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
+            val notificationGranted =
+                ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
             if (!notificationGranted) {
                 permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
             }
@@ -392,7 +403,8 @@ class MainActivity : AppCompatActivity() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         ) {
-            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+            fusedLocationClient
+                .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
                 .addOnSuccessListener { location ->
                     if (location != null) {
                         viewModel.setCurrentLocation(LatLng(location.latitude, location.longitude))
@@ -441,11 +453,12 @@ class MainActivity : AppCompatActivity() {
             binding.tvStatus.text = getString(R.string.notification_arrived)
         } else {
             val distStr = DistanceFormatter.formatDistance(progress.remainingDistanceToNextTurnMeters)
-            binding.tvStatus.text = getString(
-                R.string.notification_turn_instruction,
-                distStr,
-                progress.currentStep.instruction
-            )
+            binding.tvStatus.text =
+                getString(
+                    R.string.notification_turn_instruction,
+                    distStr,
+                    progress.currentStep.instruction
+                )
         }
     }
 

@@ -6,7 +6,6 @@ import com.watchnavigator.model.TravelMode
 import org.junit.Test
 
 class LocationRequestConfigTest {
-
     @Test
     fun drivingMode_hasOneSecondIntervalAndZeroDisplacement() {
         val interval = LocationRequestConfig.getIntervalMs(TravelMode.DRIVING)

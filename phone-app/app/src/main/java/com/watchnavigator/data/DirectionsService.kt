@@ -30,14 +30,15 @@ class GoogleDirectionsService(
     val apiKey: String = "",
     val serverUrl: String = "",
     val serverToken: String = "",
-    private val httpClient: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .followSslRedirects(false)
-        .build(),
+    private val httpClient: OkHttpClient =
+        OkHttpClient
+            .Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .followSslRedirects(false)
+            .build(),
     private val parser: DirectionsResponseParser = DirectionsResponseParser()
 ) : DirectionsService {
-
     val isProxyConfigured: Boolean
         get() = serverUrl.isNotBlank()
 
@@ -74,42 +75,48 @@ class GoogleDirectionsService(
             )
         }
 
-        val requestUrl = if (isUsingProxy) {
-            val normalizedUrl = serverUrl.trim().trimEnd('/')
-            val rawBase = when {
-                normalizedUrl.endsWith("/api/v1/directions") -> normalizedUrl
-                normalizedUrl.endsWith("/directions") -> "${normalizedUrl.removeSuffix("/directions")}/api/v1/directions"
-                else -> "$normalizedUrl/api/v1/directions"
+        val requestUrl =
+            if (isUsingProxy) {
+                val normalizedUrl = serverUrl.trim().trimEnd('/')
+                val rawBase =
+                    when {
+                        normalizedUrl.endsWith("/api/v1/directions") -> normalizedUrl
+                        normalizedUrl.endsWith("/directions") -> "${normalizedUrl.removeSuffix("/directions")}/api/v1/directions"
+                        else -> "$normalizedUrl/api/v1/directions"
+                    }
+
+                val parsedUrl = rawBase.toHttpUrlOrNull()
+                if (parsedUrl == null || !parsedUrl.isHttps) {
+                    throw IllegalArgumentException("Invalid NAV_SERVER_URL: $serverUrl")
+                }
+
+                val urlBuilder = parsedUrl.newBuilder()
+
+                urlBuilder
+                    .addQueryParameter("origin", originParam)
+                    .addQueryParameter("destination", destinationParam)
+                    .addQueryParameter("mode", mode.apiValue)
+                    .build()
+            } else {
+                val urlBuilder =
+                    "https://maps.googleapis.com/maps/api/directions/json"
+                        .toHttpUrlOrNull()
+                        ?.newBuilder()
+                        ?: throw IllegalArgumentException("Invalid Google Maps Directions API URL")
+
+                urlBuilder
+                    .addQueryParameter("origin", originParam)
+                    .addQueryParameter("destination", destinationParam)
+                    .addQueryParameter("mode", mode.apiValue)
+                    .addQueryParameter("key", apiKey.trim())
+                    .build()
             }
 
-            val parsedUrl = rawBase.toHttpUrlOrNull()
-            if (parsedUrl == null || !parsedUrl.isHttps) {
-                throw IllegalArgumentException("Invalid NAV_SERVER_URL: $serverUrl")
-            }
-
-            val urlBuilder = parsedUrl.newBuilder()
-
-            urlBuilder
-                .addQueryParameter("origin", originParam)
-                .addQueryParameter("destination", destinationParam)
-                .addQueryParameter("mode", mode.apiValue)
-                .build()
-        } else {
-            val urlBuilder = "https://maps.googleapis.com/maps/api/directions/json"
-                .toHttpUrlOrNull()?.newBuilder()
-                ?: throw IllegalArgumentException("Invalid Google Maps Directions API URL")
-
-            urlBuilder
-                .addQueryParameter("origin", originParam)
-                .addQueryParameter("destination", destinationParam)
-                .addQueryParameter("mode", mode.apiValue)
-                .addQueryParameter("key", apiKey.trim())
-                .build()
-        }
-
-        val requestBuilder = Request.Builder()
-            .url(requestUrl)
-            .get()
+        val requestBuilder =
+            Request
+                .Builder()
+                .url(requestUrl)
+                .get()
 
         if (isUsingProxy && serverToken.isNotBlank()) {
             requestBuilder.addHeader("Authorization", "Bearer ${serverToken.trim()}")
@@ -122,50 +129,57 @@ class GoogleDirectionsService(
         originParam: String,
         destinationParam: String,
         mode: TravelMode
-    ): Result<NavRoute> = withContext(Dispatchers.IO) {
-        val request = try {
-            buildDirectionsRequest(originParam, destinationParam, mode)
-        } catch (e: Exception) {
-            return@withContext Result.failure(e)
-        }
+    ): Result<NavRoute> =
+        withContext(Dispatchers.IO) {
+            val request =
+                try {
+                    buildDirectionsRequest(originParam, destinationParam, mode)
+                } catch (e: Exception) {
+                    return@withContext Result.failure(e)
+                }
 
-        try {
-            val client = if (isProxyConfigured) {
-                httpClient.newBuilder()
-                    .followSslRedirects(false)
-                    .addNetworkInterceptor { chain ->
-                        if (!chain.request().isHttps) {
-                            throw IOException("Cleartext HTTP traffic is not permitted: ${chain.request().url}")
-                        }
-                        chain.proceed(chain.request())
+            try {
+                val client =
+                    if (isProxyConfigured) {
+                        httpClient
+                            .newBuilder()
+                            .followSslRedirects(false)
+                            .addNetworkInterceptor { chain ->
+                                if (!chain.request().isHttps) {
+                                    throw IOException("Cleartext HTTP traffic is not permitted: ${chain.request().url}")
+                                }
+                                chain.proceed(chain.request())
+                            }.build()
+                    } else {
+                        httpClient
                     }
-                    .build()
-            } else {
-                httpClient
-            }
 
-            client.newCall(request).execute().use { response ->
-                val bodyString = response.body?.string()
+                client.newCall(request).execute().use { response ->
+                    val bodyString = response.body?.string()
 
-                if (!response.isSuccessful) {
-                    val errorMessage = extractErrorMessage(response.code, response.message, bodyString)
-                    return@withContext Result.failure(IOException(errorMessage))
+                    if (!response.isSuccessful) {
+                        val errorMessage = extractErrorMessage(response.code, response.message, bodyString)
+                        return@withContext Result.failure(IOException(errorMessage))
+                    }
+
+                    if (bodyString.isNullOrBlank()) {
+                        return@withContext Result.failure(IOException("Empty response body from Directions API"))
+                    }
+
+                    parser.parse(bodyString, mode)
                 }
-
-                if (bodyString.isNullOrBlank()) {
-                    return@withContext Result.failure(IOException("Empty response body from Directions API"))
-                }
-
-                parser.parse(bodyString, mode)
+            } catch (e: SocketTimeoutException) {
+                Result.failure(IOException("The directions request timed out. Check your connection and try again.", e))
+            } catch (e: Exception) {
+                Result.failure(e)
             }
-        } catch (e: SocketTimeoutException) {
-            Result.failure(IOException("The directions request timed out. Check your connection and try again.", e))
-        } catch (e: Exception) {
-            Result.failure(e)
         }
-    }
 
-    private fun extractErrorMessage(responseCode: Int, responseMessage: String, bodyString: String?): String {
+    private fun extractErrorMessage(
+        responseCode: Int,
+        responseMessage: String,
+        bodyString: String?
+    ): String {
         if (!bodyString.isNullOrBlank()) {
             try {
                 val json = org.json.JSONObject(bodyString)
@@ -188,8 +202,11 @@ class GoogleDirectionsService(
         return formatHttpError(responseCode, responseMessage.ifBlank { "Request failed" })
     }
 
-    private fun formatHttpError(code: Int, detail: String): String {
-        return when (code) {
+    private fun formatHttpError(
+        code: Int,
+        detail: String
+    ): String =
+        when (code) {
             400 -> "Bad Request (400): $detail"
             401 -> "Unauthorized (401): $detail"
             403 -> "Forbidden (403): $detail"
@@ -200,5 +217,4 @@ class GoogleDirectionsService(
             504 -> "Gateway Timeout (504): $detail"
             else -> "HTTP $code error from Directions API: $detail"
         }
-    }
 }

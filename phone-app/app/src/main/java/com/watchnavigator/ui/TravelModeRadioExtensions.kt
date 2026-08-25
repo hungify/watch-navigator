@@ -8,6 +8,4 @@ fun RadioGroup.checkTravelMode(mode: TravelMode) {
     check(if (mode == TravelMode.WALKING) R.id.rbWalking else R.id.rbDriving)
 }
 
-fun RadioGroup.selectedTravelMode(): TravelMode {
-    return if (checkedRadioButtonId == R.id.rbWalking) TravelMode.WALKING else TravelMode.DRIVING
-}
+fun RadioGroup.selectedTravelMode(): TravelMode = if (checkedRadioButtonId == R.id.rbWalking) TravelMode.WALKING else TravelMode.DRIVING

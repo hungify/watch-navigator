@@ -1,8 +1,8 @@
 package com.watchnavigator.engine
 
+import com.watchnavigator.model.LatLng
 import com.watchnavigator.model.NavRoute
 import com.watchnavigator.model.NavStep
-import com.watchnavigator.model.LatLng
 import com.watchnavigator.util.GeoUtils
 
 data class NavigationProgress(
@@ -35,16 +35,17 @@ class NavigationEngine(
     fun processLocation(location: LatLng): NavigationProgress {
         if (route.steps.isEmpty()) {
             _isArrived = true
-            val fallbackStep = NavStep(
-                instruction = "Arrived at destination",
-                streetName = route.destinationAddress,
-                maneuver = com.watchnavigator.model.ManeuverType.ARRIVE,
-                distanceMeters = 0,
-                durationSeconds = 0,
-                startLocation = location,
-                endLocation = location,
-                polylinePoints = listOf(location)
-            )
+            val fallbackStep =
+                NavStep(
+                    instruction = "Arrived at destination",
+                    streetName = route.destinationAddress,
+                    maneuver = com.watchnavigator.model.ManeuverType.ARRIVE,
+                    distanceMeters = 0,
+                    durationSeconds = 0,
+                    startLocation = location,
+                    endLocation = location,
+                    polylinePoints = listOf(location)
+                )
             return NavigationProgress(
                 currentStepIndex = 0,
                 currentStep = fallbackStep,

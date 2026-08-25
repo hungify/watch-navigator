@@ -4,7 +4,6 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 class PolylineDecoderTest {
-
     @Test
     fun decode_nullOrEmpty_returnsEmptyList() {
         assertThat(PolylineDecoder.decode(null)).isEmpty()

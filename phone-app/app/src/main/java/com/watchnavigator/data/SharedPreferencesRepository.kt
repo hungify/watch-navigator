@@ -8,23 +8,26 @@ import com.watchnavigator.model.UserPreferences
 
 class SharedPreferencesRepository(
     context: Context,
-    private val prefs: SharedPreferences = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences =
+        context.applicationContext
+            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 ) : PreferencesRepository {
-
     override fun getUserPreferences(): UserPreferences {
-        val travelModeValue = prefs.getString(KEY_DEFAULT_TRAVEL_MODE, TravelMode.DRIVING.apiValue)
-            ?: TravelMode.DRIVING.apiValue
+        val travelModeValue =
+            prefs.getString(KEY_DEFAULT_TRAVEL_MODE, TravelMode.DRIVING.apiValue)
+                ?: TravelMode.DRIVING.apiValue
         return UserPreferences(
             defaultTravelMode = TravelMode.fromApiValue(travelModeValue),
-            drivingVibrationThresholdMeters = prefs.getInt(
-                KEY_DRIVING_THRESHOLD,
-                UserPreferences.DEFAULT_DRIVING_THRESHOLD_METERS
-            ),
-            walkingVibrationThresholdMeters = prefs.getInt(
-                KEY_WALKING_THRESHOLD,
-                UserPreferences.DEFAULT_WALKING_THRESHOLD_METERS
-            )
+            drivingVibrationThresholdMeters =
+                prefs.getInt(
+                    KEY_DRIVING_THRESHOLD,
+                    UserPreferences.DEFAULT_DRIVING_THRESHOLD_METERS
+                ),
+            walkingVibrationThresholdMeters =
+                prefs.getInt(
+                    KEY_WALKING_THRESHOLD,
+                    UserPreferences.DEFAULT_WALKING_THRESHOLD_METERS
+                )
         )
     }
 
