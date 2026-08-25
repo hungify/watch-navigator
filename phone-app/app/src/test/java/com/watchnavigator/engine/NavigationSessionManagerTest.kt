@@ -670,6 +670,8 @@ class NavigationSessionManagerTest {
 
         override suspend fun checkPermissions(): Boolean = true
 
+        override suspend fun requestPermission(): Boolean = true
+
         override suspend fun checkConnection(): WatchConnectionState = _connectionState.value
 
         override suspend fun sendNavMessage(message: WatchNavMessage): Result<Unit> {

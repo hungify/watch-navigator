@@ -151,7 +151,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnConnectWatch.setOnClickListener {
-            viewModel.checkWatchConnection()
+            viewModel.connectOrRequestWatchPermission()
         }
 
         binding.btnNavigate.setOnClickListener {
@@ -346,7 +346,13 @@ class MainActivity : AppCompatActivity() {
                 binding.btnConnectWatch.text = getString(R.string.btn_connect_watch)
             }
             is WatchConnectionState.Unauthorized -> {
-                binding.tvWatchStatus.text = getString(R.string.watch_status_unauthorized)
+                val message = state.message
+                binding.tvWatchStatus.text =
+                    if (message.isBlank()) {
+                        getString(R.string.watch_status_unauthorized)
+                    } else {
+                        "${getString(R.string.watch_status_unauthorized)} ($message)"
+                    }
                 binding.btnConnectWatch.isEnabled = true
                 binding.btnConnectWatch.text = getString(R.string.retry)
             }
