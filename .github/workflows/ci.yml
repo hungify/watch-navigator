@@ -139,5 +139,8 @@ jobs:
       - name: Run Pre-Commit Safeguards Unit Tests
         run: bash scripts/test-pre-commit.sh
 
+      - name: Run Mock GPS Replay Unit Tests
+        run: bash scripts/test-mock-gps-replay.sh
+
       - name: Run Secret Leak Safeguard Checks
         run: bash scripts/pre-commit-check.sh --ci
