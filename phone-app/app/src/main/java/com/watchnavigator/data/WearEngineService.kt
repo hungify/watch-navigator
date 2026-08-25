@@ -4,6 +4,7 @@ import android.content.Context
 import com.huawei.hmf.tasks.Task
 import com.huawei.wearengine.HiWear
 import com.huawei.wearengine.auth.AuthClient
+import com.huawei.wearengine.auth.AuthCallback
 import com.huawei.wearengine.auth.Permission
 import com.huawei.wearengine.common.WearEngineErrorCode
 import com.huawei.wearengine.device.Device
@@ -47,6 +48,7 @@ interface WearEngineService {
     val connectionState: StateFlow<WatchConnectionState>
     val isReconnecting: StateFlow<Boolean>
     suspend fun checkPermissions(): Boolean
+    suspend fun requestPermission(): Boolean
     suspend fun checkConnection(): WatchConnectionState
     suspend fun sendNavMessage(message: WatchNavMessage): Result<Unit>
     suspend fun pingWatch(): Result<Boolean>
@@ -124,6 +126,69 @@ class HuaweiWearEngineService(
         } catch (e: Exception) {
             _connectionState.value = WatchConnectionState.Unauthorized(
                 "Failed to verify Wear Engine permissions: ${e.message}"
+            )
+            false
+        }
+    }
+
+    override suspend fun requestPermission(): Boolean = withContext(ioDispatcher) {
+        try {
+            val granted = suspendCancellableCoroutine<Boolean> { continuation ->
+                val authCallback = object : AuthCallback {
+                    override fun onOk(permissions: Array<out Permission>?) {
+                        val hasDeviceManager = permissions?.any {
+                            it == Permission.DEVICE_MANAGER || it.name == Permission.DEVICE_MANAGER.name
+                        } ?: false
+                        if (continuation.isActive) {
+                            continuation.resume(hasDeviceManager)
+                        }
+                    }
+
+                    override fun onCancel() {
+                        if (continuation.isActive) {
+                            continuation.resume(false)
+                        }
+                    }
+                }
+
+                try {
+                    val task = authClient.requestPermission(authCallback, Permission.DEVICE_MANAGER)
+                    task.addOnFailureListener { exception ->
+                        if (continuation.isActive) {
+                            continuation.resumeWithException(exception)
+                        }
+                    }
+                    task.addOnCanceledListener {
+                        if (continuation.isActive) {
+                            continuation.cancel()
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (continuation.isActive) {
+                        continuation.resumeWithException(e)
+                    }
+                }
+            }
+
+            if (granted) {
+                val state = checkConnection()
+                state is WatchConnectionState.Connected || state is WatchConnectionState.Disconnected
+            } else {
+                _connectionState.value = WatchConnectionState.Unauthorized(
+                    "Huawei Wear Engine permission request was cancelled. Please grant Device Manager permission to connect to your watch."
+                )
+                false
+            }
+        } catch (e: TimeoutCancellationException) {
+            _connectionState.value = WatchConnectionState.Unauthorized(
+                "Permission request timed out: ${e.message}"
+            )
+            false
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _connectionState.value = WatchConnectionState.Unauthorized(
+                "Failed to request Wear Engine permissions: ${e.message}"
             )
             false
         }

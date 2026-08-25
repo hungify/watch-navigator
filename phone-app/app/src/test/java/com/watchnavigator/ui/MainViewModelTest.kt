@@ -374,6 +374,73 @@ class MainViewModelTest {
 
         assertThat(viewModel.watchSendError.value).isNull()
     }
+
+    @Test
+    fun requestWatchPermission_delegatesToWearEngineServiceRequestPermission() = runTest {
+        val initialCount = fakeWearEngineService.requestPermissionCount
+        viewModel.requestWatchPermission()
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialCount + 1)
+    }
+
+    @Test
+    fun requestWatchPermission_clearsPreviousWatchSendError() = runTest {
+        fakeWearEngineService.sendResultToReturn = Result.failure(RuntimeException("Transmission failed"))
+        viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
+        val dest = LatLng(21.0175, 105.7842)
+        fakeDirectionsService.routeToReturn = createSampleRoute(dest)
+        fakePlacesService.placeLocationToReturn = dest
+
+        viewModel.selectSuggestion(PlaceSuggestion("p1", "Landmark 72", "Hanoi", "Landmark 72, Hanoi"))
+        advanceUntilIdle()
+
+        viewModel.startNavigation()
+        advanceUntilIdle()
+
+        assertThat(viewModel.watchSendError.value).isEqualTo("Transmission failed")
+
+        viewModel.requestWatchPermission()
+        advanceUntilIdle()
+
+        assertThat(viewModel.watchSendError.value).isNull()
+    }
+
+    @Test
+    fun requestWatchPermission_coalescesConcurrentCalls() = runTest {
+        val initialCount = fakeWearEngineService.requestPermissionCount
+        viewModel.requestWatchPermission()
+        viewModel.requestWatchPermission()
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialCount + 1)
+    }
+
+    @Test
+    fun connectOrRequestWatchPermission_whenUnauthorized_callsRequestPermission() = runTest {
+        fakeWearEngineService._connectionState.value = WatchConnectionState.Unauthorized("Permission required")
+        val initialReqCount = fakeWearEngineService.requestPermissionCount
+        val initialCheckCount = fakeWearEngineService.checkConnectionCount
+
+        viewModel.connectOrRequestWatchPermission()
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialReqCount + 1)
+        assertThat(fakeWearEngineService.checkConnectionCount).isEqualTo(initialCheckCount)
+    }
+
+    @Test
+    fun connectOrRequestWatchPermission_whenDisconnected_callsCheckConnection() = runTest {
+        fakeWearEngineService._connectionState.value = WatchConnectionState.Disconnected()
+        val initialReqCount = fakeWearEngineService.requestPermissionCount
+        val initialCheckCount = fakeWearEngineService.checkConnectionCount
+
+        viewModel.connectOrRequestWatchPermission()
+        advanceUntilIdle()
+
+        assertThat(fakeWearEngineService.checkConnectionCount).isEqualTo(initialCheckCount + 1)
+        assertThat(fakeWearEngineService.requestPermissionCount).isEqualTo(initialReqCount)
+    }
     @Test
     fun sendArrivalToWatch_sendsArrivalPayload() = runTest {
         viewModel.setCurrentLocation(LatLng(21.0285, 105.8542))
@@ -544,6 +611,8 @@ class MainViewModelTest {
         val sentMessages = mutableListOf<WatchNavMessage>()
         var sendResultToReturn: Result<Unit> = Result.success(Unit)
         var pingResultToReturn: Result<Boolean> = Result.success(true)
+        var requestPermissionCount = 0
+        var requestPermissionResultToReturn = true
 
         var checkConnectionCount = 0
         var autoReconnectStarted = false
@@ -551,6 +620,11 @@ class MainViewModelTest {
         var onReconnectedCallback: (suspend () -> Unit)? = null
 
         override suspend fun checkPermissions(): Boolean = permissionsGranted
+
+        override suspend fun requestPermission(): Boolean {
+            requestPermissionCount++
+            return requestPermissionResultToReturn
+        }
 
         override suspend fun checkConnection(): WatchConnectionState {
             checkConnectionCount++

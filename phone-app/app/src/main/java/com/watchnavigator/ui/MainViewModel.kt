@@ -133,6 +133,26 @@ class MainViewModel(
         }
     }
 
+    fun requestWatchPermission() {
+        if (watchConnectionJob?.isActive == true) return
+        sessionManager.clearWatchSendError()
+        watchConnectionJob = viewModelScope.launch {
+            wearEngineService?.requestPermission()
+        }
+    }
+
+    fun connectOrRequestWatchPermission() {
+        if (watchConnectionJob?.isActive == true) return
+        sessionManager.clearWatchSendError()
+        watchConnectionJob = viewModelScope.launch {
+            if (watchConnectionState.value is WatchConnectionState.Unauthorized) {
+                wearEngineService?.requestPermission()
+            } else {
+                wearEngineService?.checkConnection()
+            }
+        }
+    }
+
     fun onQueryChanged(query: String) {
         _queryFlow.value = query
     }
