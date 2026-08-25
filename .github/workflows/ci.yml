@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  phone-app:
+    name: Phone App (Android)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x phone-app/gradlew
+
+      - name: Run Phone App Unit Tests
+        working-directory: phone-app
+        run: ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Run Spotless Code Format Check
+        working-directory: phone-app
+        run: ./gradlew spotlessCheck --no-daemon
+
+      - name: Run Phone App Android Lint
+        working-directory: phone-app
+        run: ./gradlew lintDebug --no-daemon
+
+  watch-app:
+    name: Watch App (Huawei Lite Wearable)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: 'watch-app/pnpm-lock.yaml'
+
+      - name: Install dependencies
+        working-directory: watch-app
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript Typecheck
+        working-directory: watch-app
+        run: pnpm run typecheck
+
+      - name: ESLint Check
+        working-directory: watch-app
+        run: pnpm run lint
+
+      - name: Prettier Format Check
+        working-directory: watch-app
+        run: pnpm run format:check
+
+      - name: Unit Tests
+        working-directory: watch-app
+        run: pnpm run test:unit
+
+      - name: Validate Config & Icon Assets
+        working-directory: watch-app
+        run: pnpm run validate
+
+  server:
+    name: Directions Proxy Server (Cloudflare Worker)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          cache-dependency-path: 'server/pnpm-lock.yaml'
+
+      - name: Install dependencies
+        working-directory: server
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript Typecheck
+        working-directory: server
+        run: pnpm run typecheck
+
+      - name: Unit Tests
+        working-directory: server
+        run: pnpm run test:unit
+
+  dev-tools:
+    name: Developer Tools & Security Safeguards
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Developer Tools Unit Tests
+        run: bash scripts/test-check-device.sh
+
+      - name: Run Pre-Commit Safeguards Unit Tests
+        run: bash scripts/test-pre-commit.sh
+
+      - name: Run Secret Leak Safeguard Checks
+        run: bash scripts/pre-commit-check.sh --ci
