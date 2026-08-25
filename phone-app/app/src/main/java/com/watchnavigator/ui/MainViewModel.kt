@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.watchnavigator.data.DirectionsService
 import com.watchnavigator.data.PlacesSearchService
+import com.watchnavigator.data.PreferencesRepository
 import com.watchnavigator.data.WearEngineService
 import com.watchnavigator.engine.NavigationProgress
 import com.watchnavigator.engine.NavigationSessionManager
@@ -44,6 +45,7 @@ class MainViewModel(
     private val placesSearchService: PlacesSearchService,
     private val directionsService: DirectionsService,
     private val wearEngineService: WearEngineService? = null,
+    private val preferencesRepository: PreferencesRepository,
     val sessionManager: NavigationSessionManager = NavigationSessionManager.getInstance(wearEngineService, directionsService)
 ) : ViewModel() {
 
@@ -62,7 +64,7 @@ class MainViewModel(
     private val _currentLocation = MutableStateFlow<LatLng?>(null)
     val currentLocation: StateFlow<LatLng?> = _currentLocation.asStateFlow()
 
-    private val _travelMode = MutableStateFlow(TravelMode.DRIVING)
+    private val _travelMode = MutableStateFlow(preferencesRepository.getUserPreferences().defaultTravelMode)
     val travelMode: StateFlow<TravelMode> = _travelMode.asStateFlow()
 
     private val _routeState = MutableStateFlow<RouteUiState>(RouteUiState.Idle)
@@ -183,6 +185,12 @@ class MainViewModel(
         _routeState.value = RouteUiState.Idle
     }
 
+    fun refreshTravelModeFromPreferences() {
+        if (!sessionManager.isNavigating.value) {
+            setTravelMode(preferencesRepository.getUserPreferences().defaultTravelMode)
+        }
+    }
+
     fun setTravelMode(mode: TravelMode) {
         if (_travelMode.value != mode) {
             _travelMode.value = mode
@@ -245,7 +253,11 @@ class MainViewModel(
         val currentRouteState = _routeState.value
         if (currentRouteState is RouteUiState.Success && currentRouteState.route.steps.isNotEmpty()) {
             val destName = _selectedDestination.value?.primaryText ?: currentRouteState.route.destinationAddress
-            sessionManager.startSession(currentRouteState.route, _travelMode.value, destName)
+            val mode = _travelMode.value
+            val vibrationThreshold = preferencesRepository.getUserPreferences()
+                .vibrationThresholdMetersFor(mode)
+                .toDouble()
+            sessionManager.startSession(currentRouteState.route, mode, destName, vibrationThreshold)
         }
     }
 
@@ -308,13 +320,14 @@ class MainViewModel(
         private val placesSearchService: PlacesSearchService,
         private val directionsService: DirectionsService,
         private val wearEngineService: WearEngineService? = null,
+        private val preferencesRepository: PreferencesRepository,
         private val sessionManager: NavigationSessionManager? = null
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(MainViewModel::class.java)) {
                 val sm = sessionManager ?: NavigationSessionManager.getInstance(wearEngineService, directionsService)
-                return MainViewModel(placesSearchService, directionsService, wearEngineService, sm) as T
+                return MainViewModel(placesSearchService, directionsService, wearEngineService, preferencesRepository, sm) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }

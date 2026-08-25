@@ -17,7 +17,7 @@ data class NavigationProgress(
 
 class NavigationEngine(
     val route: NavRoute,
-    val stepAdvanceThresholdMeters: Double = 25.0,
+    val stepAdvanceThresholdMeters: Double = DEFAULT_STEP_ADVANCE_THRESHOLD_METERS,
     val arrivalThresholdMeters: Double = 25.0,
     val offRouteThresholdMeters: Double = 50.0
 ) {
@@ -175,5 +175,9 @@ class NavigationEngine(
     fun reset() {
         _currentStepIndex = 0
         _isArrived = false
+    }
+
+    companion object {
+        const val DEFAULT_STEP_ADVANCE_THRESHOLD_METERS = 25.0
     }
 }

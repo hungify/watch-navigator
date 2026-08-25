@@ -43,6 +43,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ui.SettingsActivity"
+            android:exported="false" />
+
         <service
             android:name=".service.NavigationForegroundService"
             android:foregroundServiceType="location"

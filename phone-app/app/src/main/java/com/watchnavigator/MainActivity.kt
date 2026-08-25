@@ -1,9 +1,11 @@
 package com.watchnavigator
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.MenuItem
 import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -22,17 +24,20 @@ import com.google.android.libraries.places.api.net.PlacesClient
 import com.watchnavigator.data.GoogleDirectionsService
 import com.watchnavigator.data.GooglePlacesSearchService
 import com.watchnavigator.data.HuaweiWearEngineService
+import com.watchnavigator.data.SharedPreferencesRepository
 import com.watchnavigator.databinding.ActivityMainBinding
 import com.watchnavigator.engine.NavigationProgress
 import com.watchnavigator.model.LatLng
-import com.watchnavigator.model.TravelMode
 import com.watchnavigator.model.WatchConnectionState
 import com.watchnavigator.service.NavigationForegroundService
 import com.watchnavigator.ui.MainViewModel
 import com.watchnavigator.ui.PlaceSuggestionsAdapter
 import com.watchnavigator.ui.RouteUiState
+import com.watchnavigator.ui.SettingsActivity
 import com.watchnavigator.ui.SuggestionsUiState
 import com.watchnavigator.ui.TurnStepsAdapter
+import com.watchnavigator.ui.checkTravelMode
+import com.watchnavigator.ui.selectedTravelMode
 import com.watchnavigator.util.DistanceFormatter
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -54,7 +59,8 @@ class MainActivity : AppCompatActivity() {
             serverToken = BuildConfig.NAV_SERVER_TOKEN
         )
         val wearEngineService = HuaweiWearEngineService(applicationContext)
-        MainViewModel.Factory(placesSearchService, directionsService, wearEngineService)
+        val preferencesRepository = SharedPreferencesRepository(applicationContext)
+        MainViewModel.Factory(placesSearchService, directionsService, wearEngineService, preferencesRepository)
     }
 
     private val permissionsLauncher = registerForActivityResult(
@@ -65,6 +71,13 @@ class MainActivity : AppCompatActivity() {
         if (fineLocationGranted || coarseLocationGranted) {
             fetchDeviceLocation()
         }
+    }
+
+    private val settingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        viewModel.refreshTravelModeFromPreferences()
+        binding.rgTravelMode.checkTravelMode(viewModel.travelMode.value)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -115,15 +128,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
+        binding.toolbar.inflateMenu(R.menu.menu_main)
+        binding.toolbar.setOnMenuItemClickListener { menuItem -> onMenuItemSelected(menuItem) }
+
+        binding.rgTravelMode.checkTravelMode(viewModel.travelMode.value)
+
         binding.etDestination.doAfterTextChanged { text ->
             suggestionsAdapter.submitList(emptyList())
             binding.cardSuggestions.visibility = View.GONE
             viewModel.onQueryChanged(text?.toString() ?: "")
         }
 
-        binding.rgTravelMode.setOnCheckedChangeListener { _, checkedId ->
-            val mode = if (checkedId == R.id.rbWalking) TravelMode.WALKING else TravelMode.DRIVING
-            viewModel.setTravelMode(mode)
+        binding.rgTravelMode.setOnCheckedChangeListener { _, _ ->
+            viewModel.setTravelMode(binding.rgTravelMode.selectedTravelMode())
         }
 
         binding.btnRetry.setOnClickListener {
@@ -284,6 +301,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+        if (menuItem.itemId == R.id.action_settings) {
+            settingsLauncher.launch(Intent(this, SettingsActivity::class.java))
+            return true
+        }
+        return false
+    }
+
     private fun updateWatchStatusUI(state: WatchConnectionState, sendError: String?) {
         if (sendError != null) {
             binding.tvWatchStatus.text = getString(R.string.watch_status_error, sendError)
@@ -394,6 +419,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateNavigationUI(isNavigating: Boolean) {
+        binding.rgTravelMode.isEnabled = !isNavigating
+        for (i in 0 until binding.rgTravelMode.childCount) {
+            binding.rgTravelMode.getChildAt(i).isEnabled = !isNavigating
+        }
+
         if (isNavigating) {
             binding.tvStatus.text = getString(R.string.status_navigating)
             binding.btnNavigate.text = getString(R.string.btn_stop_navigation)
