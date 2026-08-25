@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# WatchNavigator Git Pre-Commit Hook
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Run secret safeguards & integrity checks
+bash "${REPO_ROOT}/scripts/pre-commit-check.sh"

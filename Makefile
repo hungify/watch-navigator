@@ -1,6 +1,6 @@
 .PHONY: help device phone-build phone-install phone-run phone-test phone-lint phone-format phone-logs phone-clean \
         watch-build watch-dev watch-test watch-lint watch-format watch-validate watch-clean \
-        server-dev server-test server-lint server-deploy test build lint format clean
+        server-dev server-test server-lint server-deploy pre-commit hooks-install test build lint format clean
 
 
 # Resolve ADB binary via check-device.sh or fallback to adb
@@ -41,6 +41,8 @@ help:
 	@echo "  make test            - Run full test suite across all subprojects"
 	@echo "  make lint            - Run linters across Phone, Watch, and Server modules"
 	@echo "  make format          - Format source code across the monorepo"
+	@echo "  make pre-commit      - Run pre-commit secret safeguards"
+	@echo "  make hooks-install   - Configure Git to use .githooks"
 	@echo "  make clean           - Clean all build outputs and caches"
 	@echo "======================================================================"
 
@@ -72,12 +74,13 @@ phone-run: phone-install
 phone-test:
 	@echo "Running Phone App unit tests..."
 	@cd phone-app && ./gradlew test
-	@echo "Running Developer Tools tests..."
+	@echo "Running Developer Tools & Safeguard tests..."
 	@bash scripts/test-check-device.sh
+	@bash scripts/test-pre-commit.sh
+
 phone-format:
 	@echo "Formatting Phone App code with Spotless (ktlint)..."
 	@cd phone-app && ./gradlew spotlessApply
-
 phone-lint:
 	@echo "Checking Phone App code formatting with Spotless..."
 	@cd phone-app && ./gradlew spotlessCheck
@@ -144,6 +147,14 @@ server-lint:
 server-deploy:
 	@echo "Deploying Directions Proxy Worker to Cloudflare..."
 	@cd server && pnpm run deploy
+
+# --- Developer Quality & Safeguard Targets ---
+pre-commit:
+	@bash scripts/pre-commit-check.sh
+
+hooks-install:
+	@git config core.hooksPath .githooks
+	@echo "Git hooks installed. .githooks/pre-commit will run on every commit."
 
 # --- Monorepo / Combined Targets ---
 build: phone-build watch-build
