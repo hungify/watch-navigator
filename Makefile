@@ -1,4 +1,4 @@
-.PHONY: help device phone-build phone-install phone-run phone-test phone-lint phone-format phone-logs phone-clean \
+.PHONY: help device phone-build phone-install phone-run phone-test phone-lint phone-format phone-logs phone-gps-mock phone-clean \
         watch-build watch-dev watch-test watch-lint watch-format watch-validate watch-clean \
         server-dev server-test server-lint server-deploy pre-commit hooks-install test build lint format clean
 
@@ -19,6 +19,7 @@ help:
 	@echo "  make phone-lint      - Run Spotless format check and Android Lint on Phone App"
 	@echo "  make phone-format    - Format Phone App Kotlin code using Spotless (ktlint)"
 	@echo "  make phone-logs      - Stream live Logcat filtered for WatchNavigator"
+	@echo "  make phone-gps-mock  - Simulate mock GPS movement along sample routes for desk testing"
 	@echo "  make phone-clean     - Clean Phone App Gradle build outputs"
 	@echo ""
 	@echo "Watch App (Huawei Lite Wearable / GT5):"
@@ -77,6 +78,7 @@ phone-test:
 	@echo "Running Developer Tools & Safeguard tests..."
 	@bash scripts/test-check-device.sh
 	@bash scripts/test-pre-commit.sh
+	@bash scripts/test-mock-gps-replay.sh
 
 phone-format:
 	@echo "Formatting Phone App code with Spotless (ktlint)..."
@@ -89,6 +91,9 @@ phone-lint:
 phone-logs:
 	@echo "Streaming Logcat (Ctrl+C to stop)..."
 	@$(ADB) logcat -v time -s WatchNavigator:V WearEngine:V NavigationSessionManager:V HuaweiWearEngineService:V NavForegroundService:V NavigationService:V AndroidRuntime:E
+phone-gps-mock:
+	@bash scripts/mock-gps-replay.sh $(ARGS)
+
 
 phone-clean:
 	@echo "Cleaning Phone App Gradle outputs..."
