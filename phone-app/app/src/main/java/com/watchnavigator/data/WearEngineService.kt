@@ -3,6 +3,7 @@ package com.watchnavigator.data
 import android.content.Context
 import com.huawei.hmf.tasks.Task
 import com.huawei.wearengine.HiWear
+import com.huawei.wearengine.auth.AuthCallback
 import com.huawei.wearengine.auth.AuthClient
 import com.huawei.wearengine.auth.Permission
 import com.huawei.wearengine.common.WearEngineErrorCode
@@ -32,6 +33,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -43,11 +45,15 @@ class WearEngineServiceException(
 
 private const val DEFAULT_TIMEOUT_MS = 5000L
 
+private enum class PermissionRequestOutcome { GRANTED, MISSING_DEVICE_MANAGER, CANCELLED }
+
 interface WearEngineService {
     val connectionState: StateFlow<WatchConnectionState>
     val isReconnecting: StateFlow<Boolean>
 
     suspend fun checkPermissions(): Boolean
+
+    suspend fun requestPermission(): Boolean
 
     suspend fun checkConnection(): WatchConnectionState
 
@@ -75,6 +81,7 @@ class HuaweiWearEngineService(
         const val DEFAULT_PEER_PKG_NAME = "com.watchnavigator.watch"
         const val DEFAULT_PEER_FINGERPRINT = "com.watchnavigator.watch_B/gY2TR32LwRrqp46Ucfk+p49a6i3aB+y2Xw3gU5n5U="
         const val DEFAULT_TIMEOUT_MS = 5000L
+        const val PERMISSION_REQUEST_TIMEOUT_MS = 120_000L
         const val DEFAULT_INITIAL_RETRY_DELAY_MS = 2000L
         const val DEFAULT_MAX_RETRY_DELAY_MS = 15000L
         const val DEFAULT_BACKOFF_MULTIPLIER = 2.0
@@ -134,6 +141,94 @@ class HuaweiWearEngineService(
                 _connectionState.value =
                     WatchConnectionState.Unauthorized(
                         "Failed to verify Wear Engine permissions: ${e.message}"
+                    )
+                false
+            }
+        }
+
+    override suspend fun requestPermission(): Boolean =
+        withContext(ioDispatcher) {
+            try {
+                val outcome =
+                    withTimeout(PERMISSION_REQUEST_TIMEOUT_MS) {
+                        suspendCancellableCoroutine<PermissionRequestOutcome> { continuation ->
+                            val authCallback =
+                                object : AuthCallback {
+                                    override fun onOk(permissions: Array<out Permission>?) {
+                                        val hasDeviceManager =
+                                            permissions?.any {
+                                                it == Permission.DEVICE_MANAGER || it.name == Permission.DEVICE_MANAGER.name
+                                            } ?: false
+                                        if (continuation.isActive) {
+                                            continuation.resume(
+                                                if (hasDeviceManager) {
+                                                    PermissionRequestOutcome.GRANTED
+                                                } else {
+                                                    PermissionRequestOutcome.MISSING_DEVICE_MANAGER
+                                                }
+                                            )
+                                        }
+                                    }
+
+                                    override fun onCancel() {
+                                        if (continuation.isActive) {
+                                            continuation.resume(PermissionRequestOutcome.CANCELLED)
+                                        }
+                                    }
+                                }
+
+                            try {
+                                val task = authClient.requestPermission(authCallback, Permission.DEVICE_MANAGER)
+                                task.addOnFailureListener { exception ->
+                                    if (continuation.isActive) {
+                                        continuation.resumeWithException(exception)
+                                    }
+                                }
+                                task.addOnCanceledListener {
+                                    if (continuation.isActive) {
+                                        continuation.resume(PermissionRequestOutcome.CANCELLED)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                if (continuation.isActive) {
+                                    continuation.resumeWithException(e)
+                                }
+                            }
+                        }
+                    }
+
+                when (outcome) {
+                    PermissionRequestOutcome.GRANTED -> {
+                        val state = checkConnection()
+                        state is WatchConnectionState.Connected || state is WatchConnectionState.Disconnected
+                    }
+                    PermissionRequestOutcome.MISSING_DEVICE_MANAGER -> {
+                        _connectionState.value =
+                            WatchConnectionState.Unauthorized(
+                                "Huawei Wear Engine Device Manager permission was not granted. Please grant Device Manager permission to connect to your watch."
+                            )
+                        false
+                    }
+                    PermissionRequestOutcome.CANCELLED -> {
+                        _connectionState.value =
+                            WatchConnectionState.Unauthorized(
+                                "Huawei Wear Engine permission request was cancelled. Please grant Device Manager permission to connect to your watch."
+                            )
+                        false
+                    }
+                }
+            } catch (e: TimeoutCancellationException) {
+                _connectionState.value =
+                    WatchConnectionState.Unauthorized(
+                        "Permission request timed out: ${e.message}"
+                    )
+                false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _connectionState.value =
+                    WatchConnectionState.Unauthorized(
+                        "Failed to request Wear Engine permissions: ${e.message}"
                     )
                 false
             }

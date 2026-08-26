@@ -2,9 +2,11 @@ package com.watchnavigator.data
 
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
+import com.huawei.hmf.tasks.OnCanceledListener
 import com.huawei.hmf.tasks.OnFailureListener
 import com.huawei.hmf.tasks.OnSuccessListener
 import com.huawei.hmf.tasks.Task
+import com.huawei.wearengine.auth.AuthCallback
 import com.huawei.wearengine.auth.AuthClient
 import com.huawei.wearengine.auth.Permission
 import com.huawei.wearengine.common.WearEngineErrorCode
@@ -78,6 +80,18 @@ class HuaweiWearEngineServiceTest {
         return task
     }
 
+    private fun <T> mockCanceledTask(): Task<T> {
+        val task = mockk<Task<T>>()
+        val canceledSlot = slot<OnCanceledListener>()
+        every { task.addOnSuccessListener(any()) } returns task
+        every { task.addOnFailureListener(any()) } returns task
+        every { task.addOnCanceledListener(capture(canceledSlot)) } answers {
+            canceledSlot.captured.onCanceled()
+            task
+        }
+        return task
+    }
+
     private fun <T> mockPendingTask(): Task<T> {
         val task = mockk<Task<T>>()
         every { task.addOnSuccessListener(any()) } returns task
@@ -118,6 +132,146 @@ class HuaweiWearEngineServiceTest {
 
             assertThat(result).isFalse()
             assertThat(service.connectionState.value).isInstanceOf(WatchConnectionState.Unauthorized::class.java)
+        }
+
+    @Test
+    fun requestPermission_whenUserGrantsPermissionAndWatchConnected_returnsTrueAndTransitionsToConnected() =
+        runTest(testDispatcher) {
+            val callbackSlot = slot<AuthCallback>()
+            val reqTask = mockSuccessfulTask<Void?>(null)
+            every { authClient.requestPermission(capture(callbackSlot), Permission.DEVICE_MANAGER) } answers {
+                callbackSlot.captured.onOk(arrayOf(Permission.DEVICE_MANAGER))
+                reqTask
+            }
+            val permTask = mockSuccessfulTask(true)
+            every { authClient.checkPermission(Permission.DEVICE_MANAGER) } returns permTask
+            val devTask = mockSuccessfulTask(true)
+            every { deviceClient.hasAvailableDevices() } returns devTask
+            val mockDevice = createMockDevice(name = "HUAWEI WATCH GT 5", connected = true)
+            val bondedTask = mockSuccessfulTask(listOf(mockDevice))
+            every { deviceClient.getBondedDevices() } returns bondedTask
+
+            val result = service.requestPermission()
+
+            assertThat(result).isTrue()
+            assertThat(service.connectionState.value).isInstanceOf(WatchConnectionState.Connected::class.java)
+            val state = service.connectionState.value as WatchConnectionState.Connected
+            assertThat(state.deviceName).isEqualTo("HUAWEI WATCH GT 5")
+        }
+
+    @Test
+    fun requestPermission_whenUserGrantsPermissionAndNoWatchAvailable_returnsTrueAndTransitionsToDisconnected() =
+        runTest(testDispatcher) {
+            val callbackSlot = slot<AuthCallback>()
+            val reqTask = mockSuccessfulTask<Void?>(null)
+            every { authClient.requestPermission(capture(callbackSlot), Permission.DEVICE_MANAGER) } answers {
+                callbackSlot.captured.onOk(arrayOf(Permission.DEVICE_MANAGER))
+                reqTask
+            }
+            val permTask = mockSuccessfulTask(true)
+            every { authClient.checkPermission(Permission.DEVICE_MANAGER) } returns permTask
+            val devTask = mockSuccessfulTask(false)
+            every { deviceClient.hasAvailableDevices() } returns devTask
+
+            val result = service.requestPermission()
+
+            assertThat(result).isTrue()
+            assertThat(service.connectionState.value).isInstanceOf(WatchConnectionState.Disconnected::class.java)
+            val state = service.connectionState.value as WatchConnectionState.Disconnected
+            assertThat(state.reason).contains("No available Huawei wearable devices")
+        }
+
+    @Test
+    fun requestPermission_whenUserCancels_returnsFalseAndSetsUnauthorizedStateWithClearGuidance() =
+        runTest(testDispatcher) {
+            val callbackSlot = slot<AuthCallback>()
+            val reqTask = mockSuccessfulTask<Void?>(null)
+            every { authClient.requestPermission(capture(callbackSlot), Permission.DEVICE_MANAGER) } answers {
+                callbackSlot.captured.onCancel()
+                reqTask
+            }
+
+            val result = service.requestPermission()
+
+            assertThat(result).isFalse()
+            assertThat(service.connectionState.value).isInstanceOf(WatchConnectionState.Unauthorized::class.java)
+            val state = service.connectionState.value as WatchConnectionState.Unauthorized
+            assertThat(state.message.lowercase()).contains("cancel")
+        }
+
+    @Test
+    fun requestPermission_whenTaskIsCanceled_returnsFalseAndSetsUnauthorizedState() =
+        runTest(testDispatcher) {
+            val reqTask = mockCanceledTask<Void?>()
+            every { authClient.requestPermission(any(), Permission.DEVICE_MANAGER) } returns reqTask
+
+            val result = service.requestPermission()
+
+            assertThat(result).isFalse()
+            assertThat(service.connectionState.value).isInstanceOf(WatchConnectionState.Unauthorized::class.java)
+        }
+
+    @Test
+    fun requestPermission_whenTaskFails_returnsFalseAndSetsUnauthorizedState() =
+        runTest(testDispatcher) {
+            val callbackSlot = slot<AuthCallback>()
+            val reqTask = mockFailedTask<Void?>(RuntimeException("Huawei Health service unavailable"))
+            every { authClient.requestPermission(capture(callbackSlot), Permission.DEVICE_MANAGER) } returns reqTask
+
+            val result = service.requestPermission()
+
+            assertThat(result).isFalse()
+            assertThat(service.connectionState.value).isInstanceOf(WatchConnectionState.Unauthorized::class.java)
+            val state = service.connectionState.value as WatchConnectionState.Unauthorized
+            assertThat(state.message).contains("Huawei Health service unavailable")
+        }
+
+    @Test
+    fun requestPermission_whenUserGrantsWithoutDeviceManager_returnsFalseAndSetsUnauthorizedState() =
+        runTest(testDispatcher) {
+            val callbackSlot = slot<AuthCallback>()
+            val reqTask = mockSuccessfulTask<Void?>(null)
+            every { authClient.requestPermission(capture(callbackSlot), Permission.DEVICE_MANAGER) } answers {
+                callbackSlot.captured.onOk(arrayOf(Permission.NOTIFY))
+                reqTask
+            }
+
+            val result = service.requestPermission()
+
+            assertThat(result).isFalse()
+            assertThat(service.connectionState.value).isInstanceOf(WatchConnectionState.Unauthorized::class.java)
+            val state = service.connectionState.value as WatchConnectionState.Unauthorized
+            assertThat(state.message.lowercase()).doesNotContain("cancel")
+            assertThat(state.message).contains("Device Manager")
+        }
+
+    @Test
+    fun requestPermission_whenTaskDoesNotCallBack_timesOutAndSetsUnauthorizedState() =
+        runTest(testDispatcher) {
+            val reqTask = mockPendingTask<Void?>()
+            every { authClient.requestPermission(any(), Permission.DEVICE_MANAGER) } returns reqTask
+
+            val resultDeferred = async { service.requestPermission() }
+            advanceTimeBy(HuaweiWearEngineService.PERMISSION_REQUEST_TIMEOUT_MS)
+            runCurrent()
+
+            assertThat(resultDeferred.await()).isFalse()
+            assertThat(service.connectionState.value).isInstanceOf(WatchConnectionState.Unauthorized::class.java)
+            val state = service.connectionState.value as WatchConnectionState.Unauthorized
+            assertThat(state.message).contains("timed out")
+        }
+
+    @Test
+    fun requestPermission_whenThrowsException_returnsFalseAndSetsUnauthorizedState() =
+        runTest(testDispatcher) {
+            every { authClient.requestPermission(any(), Permission.DEVICE_MANAGER) } throws SecurityException("Permission check failed")
+
+            val result = service.requestPermission()
+
+            assertThat(result).isFalse()
+            assertThat(service.connectionState.value).isInstanceOf(WatchConnectionState.Unauthorized::class.java)
+            val state = service.connectionState.value as WatchConnectionState.Unauthorized
+            assertThat(state.message).contains("Permission check failed")
         }
 
     @Test
